@@ -1,5 +1,3 @@
-
-
 #EXTM3U
 #EXTVLCOPT:x-tvg-url="https://iptvsystem.my.id/epg,https://warningfm.github.io/x1/epg/guide.xml.gz,https://www.open-epg.com/files/indonesia1.xml,https://www.open-epg.com/files/indonesia3.xml,https://www.open-epg.com/files/indonesia4.xml" refresh="3600"
 
@@ -7,18 +5,18 @@
 # Some IPTV players support the #INCLUDE directive. If not, you can concatenate these files manually.
 
 #EXTINF:-1, Lokal Channels
-#INCLUDE lokal.m3u
+#INCLUDE https://raw.githubusercontent.com/sudtanj/IPTV/refs/heads/master/lokal.m3u
 
 #EXTINF:-1, Entertainment
-#INCLUDE entertainment.m3u
+#INCLUDE https://raw.githubusercontent.com/sudtanj/IPTV/refs/heads/master/entertainment.m3u
 
 #EXTINF:-1, Movies
-#INCLUDE movies.m3u
+#INCLUDE https://raw.githubusercontent.com/sudtanj/IPTV/refs/heads/master/movies.m3u
 
 #EXTINF:-1, Kids
-#INCLUDE kids.m3u
+#INCLUDE https://raw.githubusercontent.com/sudtanj/IPTV/refs/heads/master/kids.m3u
 
 #EXTINF:-1, Sports
-#INCLUDE sports.m3u
+#INCLUDE https://raw.githubusercontent.com/sudtanj/IPTV/refs/heads/master/sports.m3u
 
 #EXTVLCOPT:billed-msg="MOHON UNTUK TIDAK MENYIARKAN ULANG SIARAN IPTV ATAU MENJUAL INFORMASI SIARAN"
