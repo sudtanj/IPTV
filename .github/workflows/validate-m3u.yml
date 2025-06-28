@@ -1,0 +1,56 @@
+name: Validate M3U Links
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.m3u'
+  pull_request:
+    paths:
+      - '**.m3u'
+
+jobs:
+  validate-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Validate all links in M3U files
+        run: |
+          import glob
+          import re
+          import requests
+          import sys
+
+          m3u_files = glob.glob('**/*.m3u', recursive=True)
+          url_pattern = re.compile(r'^(https?://[^\s]+)$', re.MULTILINE)
+          failed = False
+
+          for m3u in m3u_files:
+              print(f'Checking {m3u}...')
+              with open(m3u, encoding='utf-8') as f:
+                  content = f.read()
+              urls = url_pattern.findall(content)
+              for url in urls:
+                  try:
+                      r = requests.head(url, timeout=10, allow_redirects=True)
+                      if r.status_code >= 400:
+                          print(f'::error file={m3u}::Broken link: {url} (status {r.status_code})')
+                          failed = True
+                      else:
+                          print(f'OK: {url}')
+                  except Exception as e:
+                      print(f'::error file={m3u}::Error checking {url}: {e}')
+                      failed = True
+          if failed:
+              sys.exit(1)
+        shell: python
