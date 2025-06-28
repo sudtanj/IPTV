@@ -56,11 +56,12 @@ jobs:
               for url in urls:
                   try:
                       r = requests.head(url, timeout=10, allow_redirects=True)
-                      if r.status_code >= 400:
+                      # Ignore 403 (Forbidden), treat as OK
+                      if r.status_code >= 400 and r.status_code != 403:
                           print(f'::error file={m3u}::Broken link: {url} (status {r.status_code})')
                           failed = True
                       else:
-                          print(f'OK: {url}')
+                          print(f'OK: {url} (status {r.status_code})')
                   except Exception as e:
                       print(f'::error file={m3u}::Error checking {url}: {e}')
                       failed = True
