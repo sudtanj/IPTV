@@ -84,16 +84,7 @@ jobs:
               with open(m3u, encoding='utf-8') as f:
                   lines = f.readlines()
               # --- M3U format validation ---
-              # Skip blank lines and invisible characters (including BOM) before checking for #EXTM3U
-              header_found = False
-              for line in lines:
-                  clean = line.strip().lstrip('\ufeff')  # Remove BOM if present
-                  if clean == '':
-                      continue
-                  if clean.startswith('#EXTM3U'):
-                      header_found = True
-                  break
-              if not header_found:
+              if not lines or not lines[0].strip().startswith('#EXTM3U'):
                   print(f'::error file={m3u}::Missing or invalid #EXTM3U header')
                   failed = True
               # Check for #EXTINF before each URL
