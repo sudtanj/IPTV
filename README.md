@@ -1,6 +1,6 @@
 # IPTV Playlist Repository
 
-This repository contains an IPTV playlist in M3U format, along with automation scripts and GitHub Actions for quality control and reporting.
+This repository contains an IPTV playlist in M3U format, along with automation scripts and GitHub Actions for quality control and reporting. This script is for research and personal study purposes only. Do not use for rebroadcasting or commercial purposes.
 
 ## Features
 - **M3U Playlist**: `index.m3u` with Indonesian and international TV channels, movies, kids, and sports sections.
