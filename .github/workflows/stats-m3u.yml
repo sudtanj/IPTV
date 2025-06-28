@@ -1,0 +1,25 @@
+name: Playlist Stats Reporter
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Run stats reporter
+        run: python stats_m3u.py > playlist_stats.txt
+      - name: Upload stats artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playlist-stats
+          path: playlist_stats.txt

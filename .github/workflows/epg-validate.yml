@@ -1,0 +1,24 @@
+name: EPG XML Validator
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: '0 2 * * *' # every day at 02:00 UTC
+
+jobs:
+  epg-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install requests
+      - name: Validate EPG XML files
+        run: python epg_validate.py
