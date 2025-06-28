@@ -1,3 +1,7 @@
+"""
+This script is for research and personal study purposes only.
+Do not use for rebroadcasting or commercial purposes.
+"""
 import re
 import requests
 import time
@@ -46,18 +50,41 @@ def main():
     with open(M3U_FILE, encoding='utf-8') as f:
         lines = f.readlines()
     url_pattern = re.compile(r'^(https?://[^\s]+)$', re.MULTILINE)
-    urls = [line.strip() for line in lines if url_pattern.match(line.strip())]
+    urls = []
+    widevine_urls = set()
+    # Track if previous lines contain Widevine license type
+    for i, line in enumerate(lines):
+        if url_pattern.match(line.strip()):
+            url = line.strip()
+            # Look back a few lines for license type
+            is_widevine = False
+            for j in range(max(0, i-3), i):
+                if 'inputstream.adaptive.license_type=com.widevine.alpha' in lines[j]:
+                    is_widevine = True
+                    break
+            if is_widevine:
+                widevine_urls.add(url)
+            urls.append(url)
+
     failed = False
     for url in urls:
-        ok, msg = check_stream(url)
-        if ok:
-            if msg:
-                print(f'::warning file={M3U_FILE}::Stream {url}: {msg}')
+        if url in widevine_urls:
+            ok, msg = check_stream(url)
+            if ok:
+                print(f'::warning file={M3U_FILE}::Widevine stream {url}: URL reachable, but full validation not possible (DRM protected).')
             else:
-                print(f'OK: {url}')
+                print(f'::error file={M3U_FILE}::Widevine stream {url}: URL unreachable or invalid ({msg})')
+                failed = True
         else:
-            print(f'::error file={M3U_FILE}::Broken or invalid stream: {url} ({msg})')
-            failed = True
+            ok, msg = check_stream(url)
+            if ok:
+                if msg:
+                    print(f'::warning file={M3U_FILE}::Stream {url}: {msg}')
+                else:
+                    print(f'OK: {url}')
+            else:
+                print(f'::error file={M3U_FILE}::Broken or invalid stream: {url} ({msg})')
+                failed = True
     if failed:
         exit(1)
 
