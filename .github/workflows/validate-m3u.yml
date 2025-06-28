@@ -47,7 +47,7 @@ jobs:
 
           import time
 
-          def check_url(url, m3u, max_retries=3, delay=2):
+          def check_url(url, m3u, max_retries=10, delay=2):
               tries = 0
               while tries < max_retries:
                   try:
