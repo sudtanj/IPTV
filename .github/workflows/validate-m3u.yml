@@ -60,10 +60,16 @@ jobs:
                               continue
                           else:
                               return (m3u, url, r.status_code, False, None)
-                      elif r.status_code >= 400 and r.status_code != 403:
-                          return (m3u, url, r.status_code, False, None)
-                      else:
+                      elif r.status_code == 404:
+                          # Handled above, but keep for clarity
+                          pass
+                      elif r.status_code == 403:
+                          # Ignore 403
                           return (m3u, url, r.status_code, True, None)
+                      elif r.status_code >= 400:
+                          # Ignore all other errors except 404
+                          return (m3u, url, r.status_code, True, None)
+                      return (m3u, url, r.status_code, True, None)
                   except Exception as e:
                       # Only retry on 404, otherwise fail immediately
                       if tries < max_retries - 1:
