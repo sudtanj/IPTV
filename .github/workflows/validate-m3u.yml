@@ -3,11 +3,8 @@ name: Validate M3U Links
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '**.m3u'
-  pull_request:
-    paths:
-      - '**.m3u'
+    branches:
+      - master
 
 jobs:
   validate-links:
