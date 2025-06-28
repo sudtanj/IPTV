@@ -18,6 +18,15 @@ jobs:
         with:
           python-version: '3.x'
 
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: pip install requests
 
@@ -27,10 +36,23 @@ jobs:
           import re
           import requests
           import sys
+          from concurrent.futures import ThreadPoolExecutor, as_completed
 
           m3u_files = glob.glob('**/*.m3u', recursive=True)
           url_pattern = re.compile(r'^(https?://[^\s]+)$', re.MULTILINE)
           failed = False
+          link_checks = []
+          url_to_file = {}
+
+          def check_url(url, m3u):
+              try:
+                  r = requests.head(url, timeout=10, allow_redirects=True)
+                  if r.status_code >= 400 and r.status_code != 403:
+                      return (m3u, url, r.status_code, False, None)
+                  else:
+                      return (m3u, url, r.status_code, True, None)
+              except Exception as e:
+                  return (m3u, url, None, False, str(e))
 
           for m3u in m3u_files:
               print(f'Checking {m3u}...')
@@ -43,24 +65,33 @@ jobs:
               # Check for #EXTINF before each URL
               for i, line in enumerate(lines):
                   if line.strip().startswith('http'):
-                      # Look for #EXTINF in the previous 2 lines
                       if not any('#EXTINF' in lines[j] for j in range(max(0, i-2), i)):
                           print(f'::error file={m3u},line={i+1}::URL without preceding #EXTINF: {line.strip()}')
                           failed = True
-              # --- Link validation ---
+              # --- Collect URLs for concurrent link validation ---
               content = ''.join(lines)
               urls = url_pattern.findall(content)
               for url in urls:
+                  link_checks.append((url, m3u))
+                  url_to_file[url] = m3u
+
+          # --- Concurrent link validation ---
+          with ThreadPoolExecutor(max_workers=16) as executor:
+              future_to_url = {executor.submit(check_url, url, m3u): (url, m3u) for url, m3u in link_checks}
+              for future in as_completed(future_to_url):
+                  url, m3u = future_to_url[future]
                   try:
-                      r = requests.head(url, timeout=10, allow_redirects=True)
-                      # Ignore 403 (Forbidden), treat as OK
-                      if r.status_code >= 400 and r.status_code != 403:
-                          print(f'::error file={m3u}::Broken link: {url} (status {r.status_code})')
-                          failed = True
+                      m3u, url, status, ok, err = future.result()
+                      if ok:
+                          print(f'OK: {url} (status {status})')
                       else:
-                          print(f'OK: {url} (status {r.status_code})')
+                          if status:
+                              print(f'::error file={m3u}::Broken link: {url} (status {status})')
+                          else:
+                              print(f'::error file={m3u}::Error checking {url}: {err}')
+                          failed = True
                   except Exception as e:
-                      print(f'::error file={m3u}::Error checking {url}: {e}')
+                      print(f'::error file={m3u}::Error in future: {e}')
                       failed = True
           if failed:
               sys.exit(1)
