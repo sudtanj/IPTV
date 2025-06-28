@@ -24,10 +24,6 @@ This repository contains an IPTV playlist in M3U format, along with automation s
 - Please do not rebroadcast or sell IPTV streams from this playlist.
 - Open issues or pull requests for suggestions, bug reports, or new channel requests.
 
-## Legal
-- Some channels may use DRM and may not play on all devices.
-- This playlist is for personal use only. Do not rebroadcast or sell the streams.
-
 ---
 
 _This repository is maintained by the community. Automation helps keep the playlist healthy and up to date._
