@@ -38,7 +38,20 @@ jobs:
           for m3u in m3u_files:
               print(f'Checking {m3u}...')
               with open(m3u, encoding='utf-8') as f:
-                  content = f.read()
+                  lines = f.readlines()
+              # --- M3U format validation ---
+              if not lines or not lines[0].strip().startswith('#EXTM3U'):
+                  print(f'::error file={m3u}::Missing or invalid #EXTM3U header')
+                  failed = True
+              # Check for #EXTINF before each URL
+              for i, line in enumerate(lines):
+                  if line.strip().startswith('http'):
+                      # Look for #EXTINF in the previous 2 lines
+                      if not any('#EXTINF' in lines[j] for j in range(max(0, i-2), i)):
+                          print(f'::error file={m3u},line={i+1}::URL without preceding #EXTINF: {line.strip()}')
+                          failed = True
+              # --- Link validation ---
+              content = ''.join(lines)
               urls = url_pattern.findall(content)
               for url in urls:
                   try:
