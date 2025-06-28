@@ -1,4 +1,5 @@
 
+
 #EXTM3U
 #EXTVLCOPT:x-tvg-url="https://iptvsystem.my.id/epg,https://warningfm.github.io/x1/epg/guide.xml.gz,https://www.open-epg.com/files/indonesia1.xml,https://www.open-epg.com/files/indonesia3.xml,https://www.open-epg.com/files/indonesia4.xml" refresh="3600"
 
@@ -20,4 +21,4 @@
 #EXTINF:-1, Sports
 #INCLUDE sports.m3u
 
-#EXTM3U billed-msg="MOHON UNTUK TIDAK MENYIARKAN ULANG SIARAN IPTV ATAU MENJUAL INFORMASI SIARAN"
+#EXTVLCOPT:billed-msg="MOHON UNTUK TIDAK MENYIARKAN ULANG SIARAN IPTV ATAU MENJUAL INFORMASI SIARAN"
