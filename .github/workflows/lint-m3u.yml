@@ -16,6 +16,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - name: Set up ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install dependencies
         run: pip install requests
       - name: Run M3U linter
