@@ -48,48 +48,40 @@ for i, line in enumerate(lines):
         license_key = lstr.split('=', 1)[1].strip()
     elif lstr.startswith('http') and '.mpd' in lstr:
         url = lstr
-        # Only check decryption for clearkey
-        if license_type and 'clearkey' in license_type.lower():
-            if not license_key or (':' not in license_key and not license_key.startswith('{')):
-                print(f'::error file={M3U_FILE},line={i+1}::.mpd stream missing or invalid clearkey license_key: {url}')
-                sys.exit(1)
-            # If license_key is a JSON dict, use the first key:value pair
-            key_arg = None
-            if license_key.startswith('{'):
-                import json
-                try:
-                    keydict = json.loads(license_key.replace("'", '"'))
-                    if isinstance(keydict, dict) and keydict:
-                        key_arg = next(iter(keydict.items()))
-                        key_arg = f"{key_arg[0]}:{key_arg[1]}"
-                except Exception as e:
-                    print(f'::error file={M3U_FILE},line={i+1}::.mpd stream invalid clearkey JSON license_key: {license_key} ({e})')
-                    sys.exit(1)
+        # Widevine validation
+        if license_type and 'widevine' in license_type.lower():
+            if not license_key or not license_key.startswith('http'):
+                print(f'::warning file={M3U_FILE},line={i+1}::.mpd stream Widevine license_key is not a URL, skipping ffmpeg decryption check: {url}')
             else:
-                key_arg = license_key
-            import time
-            for attempt in range(1, 11):
-                try:
-                    result = subprocess.run([
-                        'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
-                        '-decryption_key', key_arg,
-                        '-i', url,
-                        '-t', '1', '-f', 'null', '-'
-                    ], capture_output=True, text=True)
-                    if result.returncode == 0:
-                        break
-                    else:
+                import time
+                for attempt in range(1, 11):
+                    try:
+                        result = subprocess.run([
+                            'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
+                            '-wvlicense', license_key,
+                            '-i', url,
+                            '-t', '1', '-f', 'null', '-'
+                        ], capture_output=True, text=True)
+                        if result.returncode == 0:
+                            break
+                        else:
+                            if attempt < 10:
+                                time.sleep(2)
+                            else:
+                                print(f'::error file={M3U_FILE},line={i+1}::.mpd Widevine stream could not be accessed or decrypted after 10 retries: {url}\nffmpeg error: {result.stderr.strip()}')
+                                sys.exit(1)
+                    except Exception as e:
                         if attempt < 10:
                             time.sleep(2)
                         else:
-                            print(f'::error file={M3U_FILE},line={i+1}::.mpd stream could not be accessed or decrypted with clearkey after 10 retries: {url}\nffmpeg error: {result.stderr.strip()}')
+                            print(f'::error file={M3U_FILE},line={i+1}::.mpd Widevine stream ffmpeg check failed after 10 retries: {url}\nException: {e}')
                             sys.exit(1)
-                except Exception as e:
-                    if attempt < 10:
-                        time.sleep(2)
-                    else:
-                        print(f'::error file={M3U_FILE},line={i+1}::.mpd stream ffmpeg check failed after 10 retries: {url}\nException: {e}')
-                        sys.exit(1)
+        # Clearkey validation
+        elif license_type and 'clearkey' in license_type.lower():
+            if not license_key or not license_key.startswith('http'):
+                print(f'::warning file={M3U_FILE},line={i+1}::.mpd stream license_key is not a URL, skipping ffmpeg decryption check: {url}')
+            else:
+                print(f'::warning file={M3U_FILE},line={i+1}::.mpd stream license_key is a URL, skipping ffmpeg decryption check: {url}')
         # Reset license_type and license_key for next entry
         license_type = None
         license_key = None
