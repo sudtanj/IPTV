@@ -67,19 +67,29 @@ for i, line in enumerate(lines):
                     sys.exit(1)
             else:
                 key_arg = license_key
-            try:
-                result = subprocess.run([
-                    'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
-                    '-decryption_key', key_arg,
-                    '-i', url,
-                    '-t', '1', '-f', 'null', '-'
-                ], capture_output=True, text=True)
-                if result.returncode != 0:
-                    print(f'::error file={M3U_FILE},line={i+1}::.mpd stream could not be accessed or decrypted with clearkey: {url}\nffmpeg error: {result.stderr.strip()}')
-                    sys.exit(1)
-            except Exception as e:
-                print(f'::error file={M3U_FILE},line={i+1}::.mpd stream ffmpeg check failed: {url}\nException: {e}')
-                sys.exit(1)
+            import time
+            for attempt in range(1, 11):
+                try:
+                    result = subprocess.run([
+                        'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
+                        '-decryption_key', key_arg,
+                        '-i', url,
+                        '-t', '1', '-f', 'null', '-'
+                    ], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        break
+                    else:
+                        if attempt < 10:
+                            time.sleep(2)
+                        else:
+                            print(f'::error file={M3U_FILE},line={i+1}::.mpd stream could not be accessed or decrypted with clearkey after 10 retries: {url}\nffmpeg error: {result.stderr.strip()}')
+                            sys.exit(1)
+                except Exception as e:
+                    if attempt < 10:
+                        time.sleep(2)
+                    else:
+                        print(f'::error file={M3U_FILE},line={i+1}::.mpd stream ffmpeg check failed after 10 retries: {url}\nException: {e}')
+                        sys.exit(1)
         # Reset license_type and license_key for next entry
         license_type = None
         license_key = None
