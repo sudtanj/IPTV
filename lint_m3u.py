@@ -35,24 +35,53 @@ for i, line in enumerate(lines):
             print(f'::warning file={M3U_FILE},line={i+1}::#EXTINF missing tvg-id or group-title: {line.strip()}')
 
 
-# Check for valid license_key in .mpd stream URLs and try to access the stream with ffmpeg
+
+# Check for valid license_key in .mpd stream URLs and try to access the stream with ffmpeg (clearkey only)
+license_type = None
+license_key = None
 for i, line in enumerate(lines):
-    url = line.strip()
-    if url.startswith('http') and '.mpd' in url:
-        # Try to probe the stream with ffmpeg
-        try:
-            # ffmpeg expects the license key as a header or option depending on DRM system; this is a generic probe
-            # This command will not download the whole stream, just probe it
-            result = subprocess.run([
-                'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
-                '-i', url,
-                '-t', '1', '-f', 'null', '-'
-            ], capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f'::error file={M3U_FILE},line={i+1}::.mpd stream could not be accessed or decrypted with license_key: {url}\nffmpeg error: {result.stderr.strip()}')
+    lstr = line.strip()
+    # Track license_type and license_key from KODIPROP lines
+    if lstr.startswith('#KODIPROP:inputstream.adaptive.license_type='):
+        license_type = lstr.split('=', 1)[1].strip()
+    elif lstr.startswith('#KODIPROP:inputstream.adaptive.license_key='):
+        license_key = lstr.split('=', 1)[1].strip()
+    elif lstr.startswith('http') and '.mpd' in lstr:
+        url = lstr
+        # Only check decryption for clearkey
+        if license_type and 'clearkey' in license_type.lower():
+            if not license_key or (':' not in license_key and not license_key.startswith('{')):
+                print(f'::error file={M3U_FILE},line={i+1}::.mpd stream missing or invalid clearkey license_key: {url}')
                 sys.exit(1)
-        except Exception as e:
-            print(f'::error file={M3U_FILE},line={i+1}::.mpd stream ffmpeg check failed: {url}\nException: {e}')
-            sys.exit(1)
+            # If license_key is a JSON dict, use the first key:value pair
+            key_arg = None
+            if license_key.startswith('{'):
+                import json
+                try:
+                    keydict = json.loads(license_key.replace("'", '"'))
+                    if isinstance(keydict, dict) and keydict:
+                        key_arg = next(iter(keydict.items()))
+                        key_arg = f"{key_arg[0]}:{key_arg[1]}"
+                except Exception as e:
+                    print(f'::error file={M3U_FILE},line={i+1}::.mpd stream invalid clearkey JSON license_key: {license_key} ({e})')
+                    sys.exit(1)
+            else:
+                key_arg = license_key
+            try:
+                result = subprocess.run([
+                    'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
+                    '-decryption_key', key_arg,
+                    '-i', url,
+                    '-t', '1', '-f', 'null', '-'
+                ], capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f'::error file={M3U_FILE},line={i+1}::.mpd stream could not be accessed or decrypted with clearkey: {url}\nffmpeg error: {result.stderr.strip()}')
+                    sys.exit(1)
+            except Exception as e:
+                print(f'::error file={M3U_FILE},line={i+1}::.mpd stream ffmpeg check failed: {url}\nException: {e}')
+                sys.exit(1)
+        # Reset license_type and license_key for next entry
+        license_type = None
+        license_key = None
 
 print('Lint passed.')
