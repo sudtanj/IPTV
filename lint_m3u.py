@@ -1,3 +1,4 @@
+import requests
 import re
 import sys
 import subprocess
@@ -34,56 +35,23 @@ for i, line in enumerate(lines):
         if 'tvg-id' not in line or 'group-title' not in line:
             print(f'::warning file={M3U_FILE},line={i+1}::#EXTINF missing tvg-id or group-title: {line.strip()}')
 
-
-
-# Check for valid license_key in .mpd stream URLs and try to access the stream with ffmpeg (clearkey only)
+# Check if license_key is a URL and test accessibility (after all other checks)
 license_type = None
 license_key = None
 for i, line in enumerate(lines):
     lstr = line.strip()
-    # Track license_type and license_key from KODIPROP lines
     if lstr.startswith('#KODIPROP:inputstream.adaptive.license_type='):
         license_type = lstr.split('=', 1)[1].strip()
     elif lstr.startswith('#KODIPROP:inputstream.adaptive.license_key='):
         license_key = lstr.split('=', 1)[1].strip()
-    elif lstr.startswith('http') and '.mpd' in lstr:
-        url = lstr
-        # Widevine validation
-        if license_type and 'widevine' in license_type.lower():
-            if not license_key or not license_key.startswith('http'):
-                print(f'::warning file={M3U_FILE},line={i+1}::.mpd stream Widevine license_key is not a URL, skipping ffmpeg decryption check: {url}')
-            else:
-                import time
-                for attempt in range(1, 11):
-                    try:
-                        result = subprocess.run([
-                            'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
-                            '-wvlicense', license_key,
-                            '-i', url,
-                            '-t', '1', '-f', 'null', '-'
-                        ], capture_output=True, text=True)
-                        if result.returncode == 0:
-                            break
-                        else:
-                            if attempt < 10:
-                                time.sleep(2)
-                            else:
-                                print(f'::error file={M3U_FILE},line={i+1}::.mpd Widevine stream could not be accessed or decrypted after 10 retries: {url}\nffmpeg error: {result.stderr.strip()}')
-                                sys.exit(1)
-                    except Exception as e:
-                        if attempt < 10:
-                            time.sleep(2)
-                        else:
-                            print(f'::error file={M3U_FILE},line={i+1}::.mpd Widevine stream ffmpeg check failed after 10 retries: {url}\nException: {e}')
-                            sys.exit(1)
-        # Clearkey validation
-        elif license_type and 'clearkey' in license_type.lower():
-            if not license_key or not license_key.startswith('http'):
-                print(f'::warning file={M3U_FILE},line={i+1}::.mpd stream license_key is not a URL, skipping ffmpeg decryption check: {url}')
-            else:
-                print(f'::warning file={M3U_FILE},line={i+1}::.mpd stream license_key is a URL, skipping ffmpeg decryption check: {url}')
-        # Reset license_type and license_key for next entry
-        license_type = None
-        license_key = None
-
+        if license_key.startswith('http'):
+            try:
+                resp = requests.head(license_key, timeout=10)
+                if resp.status_code != 200:
+                    print(f'::error file={M3U_FILE},line={i+1}::license_key URL not accessible (status {resp.status_code}): {license_key}')
+                    sys.exit(1)
+            except Exception as e:
+                print(f'::error file={M3U_FILE},line={i+1}::license_key URL not accessible: {license_key} ({e})')
+                sys.exit(1)
+                
 print('Lint passed.')
