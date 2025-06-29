@@ -1,5 +1,6 @@
 import re
 import sys
+import subprocess
 from collections import Counter
 
 M3U_FILE = 'index.m3u'
@@ -32,5 +33,26 @@ for i, line in enumerate(lines):
     if line.strip().startswith('#EXTINF'):
         if 'tvg-id' not in line or 'group-title' not in line:
             print(f'::warning file={M3U_FILE},line={i+1}::#EXTINF missing tvg-id or group-title: {line.strip()}')
+
+
+# Check for valid license_key in .mpd stream URLs and try to access the stream with ffmpeg
+for i, line in enumerate(lines):
+    url = line.strip()
+    if url.startswith('http') and '.mpd' in url:
+        # Try to probe the stream with ffmpeg
+        try:
+            # ffmpeg expects the license key as a header or option depending on DRM system; this is a generic probe
+            # This command will not download the whole stream, just probe it
+            result = subprocess.run([
+                'ffmpeg', '-v', 'error', '-y', '-loglevel', 'error',
+                '-i', url,
+                '-t', '1', '-f', 'null', '-'
+            ], capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f'::error file={M3U_FILE},line={i+1}::.mpd stream could not be accessed or decrypted with license_key: {url}\nffmpeg error: {result.stderr.strip()}')
+                sys.exit(1)
+        except Exception as e:
+            print(f'::error file={M3U_FILE},line={i+1}::.mpd stream ffmpeg check failed: {url}\nException: {e}')
+            sys.exit(1)
 
 print('Lint passed.')

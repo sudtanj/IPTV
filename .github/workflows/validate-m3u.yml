@@ -28,8 +28,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
+
       - name: Install dependencies
         run: pip install requests
+
+      - name: Set up ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Lint M3U file
         run: python lint_m3u.py
