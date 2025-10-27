@@ -19,7 +19,7 @@ jobs:
       - name: Run stats reporter
         run: python stats_m3u.py > playlist_stats.txt
       - name: Upload stats artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playlist-stats
           path: playlist_stats.txt
