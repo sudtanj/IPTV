@@ -9,11 +9,10 @@
 
 # LOCAL SECTION
 
-#EXTINF:-1 tvg-id="Indosiar - [Channel 78].id" tvg-url="https://www.bevy.be/bevyfiles/indonesia.xml" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/INDOSIAR_Logo.png/1280px-INDOSIAR_Logo.png" group-title="NASIONAL",Indosiar jj  
-#EXTVLCOPT:http-user-agent=ExoPlayerDemo/2.15.1 (Linux; Android 13) ExoPlayerLib/2.15.1
-#KODIPROP:inputstream.adaptive.license_type=clearkey
-#KODIPROP:inputstream.adaptive.license_key=5eaddccd893a47ac8b65f9b31963a3ae:881afa67ea57b41c1822d745d67559e6
-https://atemecdnbalancer-voe.sysln.id/live/eds/IndosiarHD/mpd/IndosiarHD.mpd
+#EXTINF:-1 group-title="NASIONAL" tvg-logo="tvg-logo="https://iili.io/JMp3wV1.png", INDOSIAR 
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0
+#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=1805709,RESOLUTION=1024x576,FRAME-RATE=25.000
+http://op-group1-swiftservehd-1.dens.tv/h/h235/02.m3u8
 
 
 #KODIPROP:inputstream.adaptive.license_type=clearkey 
