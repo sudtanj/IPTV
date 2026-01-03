@@ -9,9 +9,8 @@
 
 # LOCAL SECTION
 
-#EXTINF:-1 group-title="NASIONAL" tvg-logo="tvg-logo="https://iili.io/JMp3wV1.png", INDOSIAR 
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0
-#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=1805709,RESOLUTION=1024x576,FRAME-RATE=25.000
+#EXTINF:-1 tvg-id="Indosiar.IPTV" tvg-name="Indosiar.IPTV" group-title="Lokal" tvg-logo="https://iptvsystem.my.id/img/indosiar.png",INDOSIAR
+#EXTVLCOPT:http-user-agent=ExoPlayerDemo/2.15.1 (Linux; Android 13) ExoPlayerLib/2.15.1
 http://op-group1-swiftservehd-1.dens.tv/h/h235/02.m3u8
 
 
