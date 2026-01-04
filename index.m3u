@@ -49,7 +49,7 @@ https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/chunklist.m3u8
 #EXTVLCOPT:http-referrer=http://dens.tv/
 #EXTINF:-1 tvg-id="ANTV.IPTV" tvg-name="ANTV.IPTV" group-title="Lokal" tvg-logo="https://iptvsystem.my.id/img/antv.png",ANTV
 #EXTVLCOPT:http-user-agent=DENSGO/3.00.00 (Linux;Android 15.0.0;) ExoPlayerLib/2.19.1
-https://op-group1-swiftservehd-1.dens.tv/s/s07/index.m3u8?app_type=web&userid=lite&chname=antv
+https://raw.githubusercontent.com/purseena/What-I-said-x/refs/heads/main/ANTV.m3u8
 
 
 #EXTINF:-1 tvg-id="KompasTv.IPTV" tvg-name="Kompastv.IPTV" group-title="Lokal" tvg-logo="https://iptvsystem.my.id/img/kompastv.png",Kompas TV
