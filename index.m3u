@@ -1,4 +1,8 @@
-#EXTM3U x-tvg-url="https://iptvsystem.my.id/epg,https://www.open-epg.com/files/indonesia1.xml,https://www.open-epg.com/files/indonesia3.xml,https://www.open-epg.com/files/indonesia4.xml" refresh="3600"
+#EXTM3U x-tvg-url="https://iptvsystem.my.id/epg" refresh="3600"
+#EXTM3U x-tvg-url="https://www.open-epg.com/files/indonesia1.xml" refresh="3600"
+#EXTM3U x-tvg-url="https://www.open-epg.com/files/indonesia3.xml" refresh="3600"
+#EXTM3U x-tvg-url="https://www.open-epg.com/files/indonesia4.xml" refresh="3600"
+
 
 # LOCAL SECTION
 
