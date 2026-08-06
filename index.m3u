@@ -5,12 +5,11 @@
 # LOCAL SECTION
 
 
-#EXTINF:-1 tvg-id="Indosiar.id" tvg-name="Indosiar" group-title="Lokal" tvg-logo="https://iptvsystem.my.id/img/indosiar.png",INDOSIAR
-#EXTVLCOPT:http-user-agent=ExoPlayerDemo/2.15.1
-http://op-group1-swiftservehd-1.dens.tv/h/h235/02.m3u8
+#EXTINF:-1 tvg-id="Indosiar.id" tvg-name="Indosiar" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Indosiar_2015.svg/500px-Indosiar_2015.svg.png?utm_source=id.wikipedia.org&utm_campaign=parser&utm_content=thumbnail",INDOSIAR
+#EXTVLCOPT:http-user-agent=Dalvik/2.1.0 (Linux; U; Android 12; sti6140d360 Build/QT) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 TV Safari/537.36
+https://cdnbal1.indihometv.com/atm/DASH/indosiar/indosiar-avc1_2500000=7-3277707030000000.mpd
 
-
-#EXTINF:-1 tvg-id="TransTV.IPTV" tvg-name="TransTV.IPTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/c/c2/Logo_Trans_TV.png",TRANS TV
+#EXTINF:-1 tvg-id="TransTV.id" tvg-name="TransTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/c/c2/Logo_Trans_TV.png",TRANS TV
 https://livestream.transtv.co.id/stream/live/ttv.m3u8
 
 
