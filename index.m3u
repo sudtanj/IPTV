@@ -30,9 +30,9 @@ https://cdnbal1.indihometv.com/atm/DASH/sctv/sctv-avc1_2500000=7-327770703000000
 #EXTINF:-1 tvg-id="CNNIndonesia.id" tvg-name="CNNIndonesia.id" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/9/91/CNN_Indonesia_logo.svg",CNN Indonesia
 https://live.cnnindonesia.com/livecnn/smil:cnntv.smil/playlist.m3u8
 
-#EXTINF:-1 tvg-id="CNBC Indonesia.id" tvg-name="CNBC Indonesia.id" group-title="Lokal" tvg-logo="https://iptvsystem.my.id/img/cnbcindonesia.png",CNBC Indonesia
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)
-https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/chunklist.m3u8
+#EXTINF:-1 tvg-id="CNBCIndonesia.id" tvg-name="CNBCIndonesia.id" group-title="Lokal" tvg-logo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRYoTOdwtgs7v1a6e1hXTBansOEcT2ZqJo2SBtxM6IxtA&s=10",CNBC Indonesia
+#EXTVLCOPT:http-user-agent=Mozilla/5.0
+https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/playlist.m3u8
 
 
 #EXTVLCOPT:http-referrer=http://dens.tv/
