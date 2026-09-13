@@ -35,15 +35,19 @@ EXTINF_TVG_ID_RE = re.compile(r'tvg-id="([^"]*)"')
 EXTINF_TVG_NAME_RE = re.compile(r'tvg-name="([^"]*)"')
 
 
-def verify_playable(url):
+def verify_playable(url, extra_headers=None):
     """Actually fetch the stream and check its real content, not just headers:
     an HLS URL must return a body starting with '#EXTM3U', a DASH manifest
     must contain '<MPD', anything else falls back to a content-type check.
     A HEAD request (or a GET that only checks status/content-type) isn't
     enough — plenty of dead/expired URLs still answer 200 with a plausible
-    content-type."""
+    content-type. `extra_headers` (e.g. a stream's own Referer/User-Agent
+    from its #EXTVLCOPT lines) matters too: some CDNs 403/reject requests
+    that don't send the referer a real player would send."""
     last_reason = 'unknown error'
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'}
+    if extra_headers:
+        headers.update(extra_headers)
     for attempt in range(VERIFY_RETRIES):
         try:
             resp = requests.get(url, timeout=VERIFY_TIMEOUT, stream=True,
@@ -122,6 +126,25 @@ def parse_blocks(lines):
     if current:
         blocks.append(current)
     return blocks
+
+
+EXTVLCOPT_UA_RE = re.compile(r'#EXTVLCOPT:http-user-agent=(.+)$')
+EXTVLCOPT_REFERRER_RE = re.compile(r'#EXTVLCOPT:http-referrer=(.+)$')
+
+
+def block_headers(block_text):
+    """Pull this entry's own http-user-agent/http-referrer (from its
+    #EXTVLCOPT lines) so we probe it the way a real player would."""
+    headers = {}
+    for line in block_text:
+        stripped = line.strip()
+        m = EXTVLCOPT_UA_RE.match(stripped)
+        if m:
+            headers['User-Agent'] = m.group(1).strip()
+        m = EXTVLCOPT_REFERRER_RE.match(stripped)
+        if m:
+            headers['Referer'] = m.group(1).strip()
+    return headers
 
 
 def channel_names(block_text):
@@ -270,12 +293,13 @@ def main():
 
         names = channel_names(block)
         display = names[-1] if names else '(unknown channel)'
+        headers = block_headers(block)
 
         any_alive = False
         dead_urls = []
         for idx in url_idxs:
             url = block[idx].strip()
-            ok, _ = verify_playable(url)
+            ok, _ = verify_playable(url, extra_headers=headers)
             if ok:
                 any_alive = True
                 break

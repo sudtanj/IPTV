@@ -15,11 +15,19 @@ STREAM_TYPES = [
     'mpegurl', 'dash+xml', 'mp2t', 'video/', 'application/octet-stream', 'vnd.apple.mpegurl'
 ]
 
-def check_stream(url):
+def check_stream(url, headers=None):
+    # Use GET, not HEAD: many stream CDNs reject or mishandle HEAD requests
+    # (e.g. detik.com-hosted channels), which caused false "broken" reports.
+    # stream=True + immediate close means we still only read the response
+    # headers, not the stream body.
+    req_headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-validator)'}
+    if headers:
+        req_headers.update(headers)
     tries = 0
     while tries < MAX_RETRIES:
         try:
-            r = requests.head(url, timeout=TIMEOUT, allow_redirects=True)
+            r = requests.get(url, timeout=TIMEOUT, allow_redirects=True, headers=req_headers, stream=True)
+            r.close()
             if r.status_code in (200, 206):
                 ct = r.headers.get('content-type', '').lower()
                 if any(x in ct for x in STREAM_TYPES):
@@ -46,11 +54,32 @@ def check_stream(url):
             return False, str(e)
     return False, 'Max retries reached'
 
+UA_RE = re.compile(r'#EXTVLCOPT:http-user-agent=(.+)$')
+REFERRER_RE = re.compile(r'#EXTVLCOPT:http-referrer=(.+)$')
+
+
+def entry_headers(lines, i, lookback=6):
+    """Collect the http-user-agent/http-referrer set for the entry that owns
+    the URL at line i, by scanning back to the previous blank line or #EXTINF."""
+    headers = {}
+    for j in range(i - 1, max(-1, i - lookback - 1), -1):
+        stripped = lines[j].strip()
+        if not stripped or stripped.startswith('#EXTINF'):
+            break
+        m = UA_RE.match(stripped)
+        if m and 'User-Agent' not in headers:
+            headers['User-Agent'] = m.group(1).strip()
+        m = REFERRER_RE.match(stripped)
+        if m and 'Referer' not in headers:
+            headers['Referer'] = m.group(1).strip()
+    return headers
+
+
 def main():
     with open(M3U_FILE, encoding='utf-8') as f:
         lines = f.readlines()
     url_pattern = re.compile(r'^(https?://[^\s]+)$', re.MULTILINE)
-    urls = []
+    urls = []  # list of (url, headers)
     widevine_urls = set()
     # Track if previous lines contain Widevine license type
     for i, line in enumerate(lines):
@@ -64,19 +93,19 @@ def main():
                     break
             if is_widevine:
                 widevine_urls.add(url)
-            urls.append(url)
+            urls.append((url, entry_headers(lines, i)))
 
     failed = False
-    for url in urls:
+    for url, headers in urls:
         if url in widevine_urls:
-            ok, msg = check_stream(url)
+            ok, msg = check_stream(url, headers)
             if ok:
                 print(f'::warning file={M3U_FILE}::Widevine stream {url}: URL reachable, but full validation not possible (DRM protected).')
             else:
                 print(f'::error file={M3U_FILE}::Widevine stream {url}: URL unreachable or invalid ({msg})')
                 failed = True
         else:
-            ok, msg = check_stream(url)
+            ok, msg = check_stream(url, headers)
             if ok:
                 if msg:
                     print(f'::warning file={M3U_FILE}::Stream {url}: {msg}')
