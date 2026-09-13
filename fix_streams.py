@@ -16,7 +16,7 @@ import time
 
 import requests
 
-from validate_streams import check_stream
+from validate_streams import STREAM_TYPES
 
 M3U_FILE = 'index.m3u'
 GITHUB_API = 'https://api.github.com/search/code'
@@ -25,9 +25,75 @@ MAX_CANDIDATES_PER_QUERY = 5
 MAX_FILES_TO_INSPECT = 8
 SEARCH_DELAY = 2.5  # stay under GitHub code search rate limits
 
+VERIFY_TIMEOUT = 12
+VERIFY_RETRIES = 2
+VERIFY_RETRY_DELAY = 2
+VERIFY_READ_BYTES = 4096
+
 URL_RE = re.compile(r'^https?://\S+$')
 EXTINF_TVG_ID_RE = re.compile(r'tvg-id="([^"]*)"')
 EXTINF_TVG_NAME_RE = re.compile(r'tvg-name="([^"]*)"')
+
+
+def verify_playable(url):
+    """Actually fetch the stream and check its real content, not just headers:
+    an HLS URL must return a body starting with '#EXTM3U', a DASH manifest
+    must contain '<MPD', anything else falls back to a content-type check.
+    A HEAD request (or a GET that only checks status/content-type) isn't
+    enough — plenty of dead/expired URLs still answer 200 with a plausible
+    content-type."""
+    last_reason = 'unknown error'
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'}
+    for attempt in range(VERIFY_RETRIES):
+        try:
+            resp = requests.get(url, timeout=VERIFY_TIMEOUT, stream=True,
+                                 allow_redirects=True, headers=headers)
+        except Exception as e:
+            last_reason = str(e)
+            time.sleep(VERIFY_RETRY_DELAY)
+            continue
+
+        try:
+            if resp.status_code == 403:
+                return True, 'status 403 (forbidden, assumed reachable)'
+            if resp.status_code not in (200, 206):
+                last_reason = f'status {resp.status_code}'
+                time.sleep(VERIFY_RETRY_DELAY)
+                continue
+
+            body = b''
+            try:
+                for chunk in resp.iter_content(chunk_size=VERIFY_READ_BYTES):
+                    body += chunk
+                    if len(body) >= VERIFY_READ_BYTES:
+                        break
+            except Exception as e:
+                last_reason = str(e)
+                time.sleep(VERIFY_RETRY_DELAY)
+                continue
+
+            content_type = resp.headers.get('content-type', '').lower()
+            text = body.decode('utf-8', errors='ignore').lstrip()
+            lower_url = url.lower()
+
+            if not body:
+                last_reason = 'empty response body'
+            elif '.m3u8' in lower_url or 'mpegurl' in content_type:
+                if text.startswith('#EXTM3U'):
+                    return True, None
+                last_reason = 'not a valid HLS playlist (missing #EXTM3U)'
+            elif '.mpd' in lower_url or 'dash+xml' in content_type:
+                if '<mpd' in text.lower():
+                    return True, None
+                last_reason = 'not a valid DASH manifest (missing <MPD>)'
+            elif any(t in content_type for t in STREAM_TYPES):
+                return True, None
+            else:
+                last_reason = f'unrecognized content-type: {content_type}'
+        finally:
+            resp.close()
+        time.sleep(VERIFY_RETRY_DELAY)
+    return False, last_reason
 
 
 def gh_headers():
@@ -175,7 +241,7 @@ def find_replacement(names, exclude_urls):
         for candidate_url in matching_urls(resp.text, names):
             if candidate_url in exclude_urls:
                 continue
-            ok, _ = check_stream(candidate_url)
+            ok, _ = verify_playable(candidate_url)
             if ok:
                 return candidate_url, raw_url
     return None, None
@@ -209,7 +275,7 @@ def main():
         dead_urls = []
         for idx in url_idxs:
             url = block[idx].strip()
-            ok, _ = check_stream(url)
+            ok, _ = verify_playable(url)
             if ok:
                 any_alive = True
                 break
