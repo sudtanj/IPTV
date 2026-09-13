@@ -117,21 +117,49 @@ def search_github_for_candidates(names):
     return candidates
 
 
-def extract_urls_near_name(content, names):
-    """Given a raw playlist's text, find URL(s) that appear near a matching name."""
-    lines = content.splitlines()
+def normalize(name):
+    """Fold a channel name to bare alphanumerics for tolerant-but-exact matching
+    (e.g. 'TRANS 7' and 'Trans7' normalize equal; 'RTV' and 'RTV Sellingen' do not)."""
+    return re.sub(r'[^a-z0-9]', '', name.lower())
+
+
+def extract_channel_entries(content):
+    """Parse a raw playlist into (tvg_id, tvg_name, display_name, url) entries,
+    each url anchored to the #EXTINF line that actually precedes it."""
+    entries = []
+    current = None
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('#EXTINF'):
+            m_id = EXTINF_TVG_ID_RE.search(stripped)
+            m_name = EXTINF_TVG_NAME_RE.search(stripped)
+            current = {
+                'tvg_id': m_id.group(1) if m_id else '',
+                'tvg_name': m_name.group(1) if m_name else '',
+                'display_name': stripped.rsplit(',', 1)[-1].strip(),
+            }
+        elif current is not None and URL_RE.match(stripped):
+            current['url'] = stripped
+            entries.append(current)
+            current = None
+    return entries
+
+
+def matching_urls(content, names):
+    """Return candidate URLs whose owning #EXTINF entry names the same channel
+    as one of `names`, via exact match after normalization (not substring)."""
+    target_norms = {normalize(n) for n in names if n and len(normalize(n)) >= 3}
+    if not target_norms:
+        return []
     found = []
-    lower_names = [n.lower() for n in names if n]
-    for i, line in enumerate(lines):
-        lstripped = line.strip()
-        if not lstripped or lstripped.startswith('#') and 'EXTINF' not in lstripped.upper():
-            continue
-        if any(n in lstripped.lower() for n in lower_names):
-            for j in range(i + 1, min(i + 6, len(lines))):
-                candidate = lines[j].strip()
-                if URL_RE.match(candidate):
-                    found.append(candidate)
-                    break
+    for entry in extract_channel_entries(content):
+        entry_norms = {
+            normalize(entry.get(f, ''))
+            for f in ('tvg_id', 'tvg_name', 'display_name')
+        }
+        entry_norms.discard('')
+        if entry_norms & target_norms:
+            found.append(entry['url'])
     return found
 
 
@@ -144,7 +172,7 @@ def find_replacement(names, exclude_urls):
             continue
         if resp.status_code != 200:
             continue
-        for candidate_url in extract_urls_near_name(resp.text, names):
+        for candidate_url in matching_urls(resp.text, names):
             if candidate_url in exclude_urls:
                 continue
             ok, _ = check_stream(candidate_url)
