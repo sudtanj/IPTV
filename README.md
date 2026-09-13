@@ -5,6 +5,7 @@ This repository contains an IPTV playlist in M3U format, along with automation s
 ## Features
 - **M3U Playlist**: `index.m3u` with Indonesian and international TV channels, movies, kids, and sports sections.
 - **Automated Validation**: GitHub Actions check all stream links daily to ensure they are live and valid.
+- **Auto-fix Dead Streams**: A manually-triggered GitHub Action searches public GitHub code for playlists mentioning the same channel, validates candidate URLs, and replaces dead streams automatically (old URLs are kept as commented-out lines for easy review/revert).
 - **Linting**: Checks for duplicate URLs, missing metadata, and formatting issues.
 - **Stats Reporting**: Generates statistics about the playlist (number of channels, groups, etc.).
 - **EPG Validation**: Validates EPG (Electronic Program Guide) XML files.
@@ -17,6 +18,7 @@ This repository contains an IPTV playlist in M3U format, along with automation s
 ## Scripts
 - `lint_m3u.py`: Lints the playlist for format and metadata issues.
 - `validate_streams.py`: Checks that all stream URLs are live and return valid video content.
+- `fix_streams.py`: For channels where every stream URL is dead, searches public GitHub code for a working replacement (matched by channel name/tvg-id), validates it, and swaps it in. Run manually via the "Auto-fix Dead Streams" workflow in the Actions tab.
 - `stats_m3u.py`: Reports statistics about the playlist.
 - `epg_validate.py`: Validates EPG XML files.
 
