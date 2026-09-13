@@ -27,11 +27,13 @@ https://cdnbal1.indihometv.com/atm/DASH/sctv/sctv-avc1_2500000=7-327770703000000
 
 #EXTINF:-1 tvg-id="CNNIndonesia" tvg-name="CNNIndonesia" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/CNN_Indonesia_logo.svg/512px-CNN_Indonesia_logo.svg.png",CNN Indonesia
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0
-https://live.cnnindonesia.com/livecnn/smil:cnntv.smil/playlist.m3u8
+https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/1748334379/ei/yyI1aMDyHsLEssUP4MWB6A4/ip/103.39.51.84/id/hX7b4EovtC4.3/itag/301/source/yt_live_broadcast/requiressl/yes/ratebypass/yes/live/1/sgoap/gir%3Dyes%3Bitag%3D140/sgovp/gir%3Dyes%3Bitag%3D299/rqh/1/hls_chunk_host/rr3---sn-npoe7ndl.googlevideo.com/xpc/EgVo2aDSNQ%3D%3D/playlist_duration/30/manifest_duration/30/bui/AY1jyLNu_DidxCu6gS0DzCCPROo2tQBK708Lp0jLXQB9VIsycNlRZN8Grdv6AeVLlhwfV4TPjerZHHiW/spc/l3OVKV5UuqIhdklSL-klFRCW2Vxe-ta2_zuEV7gVt4TTC_aNlO_aRMybrowjboJjQZ4/vprv/1/playlist_type/DVR/initcwndbps/363750/met/1748312781,/mh/nQ/mm/44/mn/sn-npoe7ndl/ms/lva/mv/m/mvi/3/pl/23/rms/lva,lva/dover/11/pacing/0/keepalive/yes/fexp/51355912/mt/1748312189/sparams/expire,ei,ip,id,itag,source,requiressl,ratebypass,live,sgoap,sgovp,rqh,xpc,playlist_duration,manifest_duration,bui,spc,vprv,playlist_type/sig/AJfQdSswRAIgfZYpWL9d5RDaHvYo4rSJABWi1BNJt0t0x7bcpHaOCUYCIBy-pSMLCUG_UHLnm2StMzPiuRQ-zVkgCQ62DNG8MbrL/lsparams/hls_chunk_host,initcwndbps,met,mh,mm,mn,ms,mv,mvi,pl,rms/lsig/APaTxxMwRQIhAPiTv5Hc4KvR3U4GG7poAoV6aztjM62LgVFpPOTSWewVAiBKOPeMVBb00h5VY65nEPn8rVPHNIZkglguN2AAZfuaig%3D%3D/playlist/index.m3u8
+#https://live.cnnindonesia.com/livecnn/smil:cnntv.smil/playlist.m3u8
 
 #EXTINF:-1 tvg-id="CNBCIndonesia" tvg-name="CNBCIndonesia" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/CNBC_Indonesia_logo.svg/512px-CNBC_Indonesia_logo.svg.png",CNBC Indonesia
 #EXTVLCOPT:http-user-agent=Mozilla/5.0
-https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/playlist.m3u8
+https://bugsfreeweb.github.io/LiveTVCollector/BugsfreeStreams/StreamsTV-ID/cnbc_indonesia_710a63bd.m3u8
+#https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/playlist.m3u8
 
 #EXTINF:-1 tvg-id="ANTV" tvg-name="ANTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/ANTV_logo_2012.svg/512px-ANTV_logo_2012.svg.png",ANTV
 #EXTVLCOPT:http-referrer=http://dens.tv/
@@ -445,7 +447,8 @@ https://d1ebgtxjo246w3.cloudfront.net/out/v1/9757e131659a4ab8ba08d448c4a3779e/in
 #EXTVLCOPT:http-user-agent=IndiHomeTV/8.7.12 (Linux;Android 15.0.0;) ExoPlayerLib/2.19.1
 #KODIPROP:inputstream.adaptive.license_type=clearkey
 #KODIPROP:inputstream.adaptive.license_key=69646b755f3130303030303030303030:e4a2359b05563399f1d9adfce641724a
-https://cdn08jtedge.indihometv.com/dassdvr/194/animalplanet/manifest.mpd
+http://23.237.104.106:8080/USA_ANIMAL_PLANET/index.m3u8
+#https://cdn08jtedge.indihometv.com/dassdvr/194/animalplanet/manifest.mpd
 
 
 #EXTVLCOPT:http-user-agent=ExoPlayerDemo/2.15.1 (Linux; Android 13) ExoPlayerLib/2.15.1
