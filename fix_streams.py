@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import time
+import urllib.parse
 
 import requests
 
@@ -25,29 +26,25 @@ MAX_CANDIDATES_PER_QUERY = 5
 MAX_FILES_TO_INSPECT = 8
 SEARCH_DELAY = 2.5  # stay under GitHub code search rate limits
 
+DUCKDUCKGO_URL = 'https://html.duckduckgo.com/html/'
+MAX_WEB_RESULTS = 6
+MAX_WEB_URLS_PER_PAGE = 4
+
 VERIFY_TIMEOUT = 12
 VERIFY_RETRIES = 2
 VERIFY_RETRY_DELAY = 2
-VERIFY_READ_BYTES = 4096
+VERIFY_READ_BYTES = 8192
 
 URL_RE = re.compile(r'^https?://\S+$')
+STREAM_URL_RE = re.compile(r'https?://[^\s"\'<>]+?\.(?:m3u8|mpd)(?:\?[^\s"\'<>]*)?', re.IGNORECASE)
+STREAM_INF_URI_RE = re.compile(r'#EXT-X-STREAM-INF:[^\n]*\n\s*([^\n#][^\n]*)')
 EXTINF_TVG_ID_RE = re.compile(r'tvg-id="([^"]*)"')
 EXTINF_TVG_NAME_RE = re.compile(r'tvg-name="([^"]*)"')
 
 
-def verify_playable(url, extra_headers=None):
-    """Actually fetch the stream and check its real content, not just headers:
-    an HLS URL must return a body starting with '#EXTM3U', a DASH manifest
-    must contain '<MPD', anything else falls back to a content-type check.
-    A HEAD request (or a GET that only checks status/content-type) isn't
-    enough — plenty of dead/expired URLs still answer 200 with a plausible
-    content-type. `extra_headers` (e.g. a stream's own Referer/User-Agent
-    from its #EXTVLCOPT lines) matters too: some CDNs 403/reject requests
-    that don't send the referer a real player would send."""
+def _fetch(url, headers, read_bytes=VERIFY_READ_BYTES):
+    """GET with retries, returning (ok, reason, body_bytes, content_type)."""
     last_reason = 'unknown error'
-    headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'}
-    if extra_headers:
-        headers.update(extra_headers)
     for attempt in range(VERIFY_RETRIES):
         try:
             resp = requests.get(url, timeout=VERIFY_TIMEOUT, stream=True,
@@ -56,48 +53,80 @@ def verify_playable(url, extra_headers=None):
             last_reason = str(e)
             time.sleep(VERIFY_RETRY_DELAY)
             continue
-
         try:
             if resp.status_code == 403:
-                return True, 'status 403 (forbidden, assumed reachable)'
+                return True, 'status 403 (forbidden, assumed reachable)', b'', ''
             if resp.status_code not in (200, 206):
                 last_reason = f'status {resp.status_code}'
                 time.sleep(VERIFY_RETRY_DELAY)
                 continue
-
             body = b''
             try:
-                for chunk in resp.iter_content(chunk_size=VERIFY_READ_BYTES):
+                for chunk in resp.iter_content(chunk_size=read_bytes):
                     body += chunk
-                    if len(body) >= VERIFY_READ_BYTES:
+                    if len(body) >= read_bytes:
                         break
             except Exception as e:
                 last_reason = str(e)
                 time.sleep(VERIFY_RETRY_DELAY)
                 continue
-
-            content_type = resp.headers.get('content-type', '').lower()
-            text = body.decode('utf-8', errors='ignore').lstrip()
-            lower_url = url.lower()
-
-            if not body:
-                last_reason = 'empty response body'
-            elif '.m3u8' in lower_url or 'mpegurl' in content_type:
-                if text.startswith('#EXTM3U'):
-                    return True, None
-                last_reason = 'not a valid HLS playlist (missing #EXTM3U)'
-            elif '.mpd' in lower_url or 'dash+xml' in content_type:
-                if '<mpd' in text.lower():
-                    return True, None
-                last_reason = 'not a valid DASH manifest (missing <MPD>)'
-            elif any(t in content_type for t in STREAM_TYPES):
-                return True, None
-            else:
-                last_reason = f'unrecognized content-type: {content_type}'
+            return True, None, body, resp.headers.get('content-type', '').lower()
         finally:
             resp.close()
         time.sleep(VERIFY_RETRY_DELAY)
-    return False, last_reason
+    return False, last_reason, b'', ''
+
+
+def verify_playable(url, extra_headers=None, _is_variant_check=False):
+    """Actually fetch the stream and check its real content, not just headers:
+    an HLS URL must return a body starting with '#EXTM3U', a DASH manifest
+    must contain '<MPD', anything else falls back to a content-type check.
+    A HEAD request (or a GET that only checks status/content-type) isn't
+    enough — plenty of dead/expired URLs still answer 200 with a plausible
+    content-type. `extra_headers` (e.g. a stream's own Referer/User-Agent
+    from its #EXTVLCOPT lines) matters too: some CDNs 403/reject requests
+    that don't send the referer a real player would send.
+
+    For an HLS *master* playlist, a #EXTM3U prefix alone isn't proof the
+    stream is live: some CDNs (YouTube included) keep serving a
+    structurally valid master playlist long after the underlying broadcast
+    is over, and only the referenced variant playlist actually fails. So a
+    master playlist's first variant is fetched too, one level deep."""
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'}
+    if extra_headers:
+        headers.update(extra_headers)
+
+    ok, reason, body, content_type = _fetch(url, headers)
+    if not ok:
+        return False, reason
+    if reason == 'status 403 (forbidden, assumed reachable)':
+        return True, reason
+    if not body:
+        return False, 'empty response body'
+
+    text = body.decode('utf-8', errors='ignore').lstrip()
+    lower_url = url.lower()
+
+    if '.m3u8' in lower_url or 'mpegurl' in content_type:
+        if not text.startswith('#EXTM3U'):
+            return False, 'not a valid HLS playlist (missing #EXTM3U)'
+        if _is_variant_check:
+            return True, None
+        m = STREAM_INF_URI_RE.search(text)
+        if m:
+            variant_url = urllib.parse.urljoin(url, m.group(1).strip())
+            child_ok, child_reason = verify_playable(variant_url, extra_headers, _is_variant_check=True)
+            if not child_ok:
+                return False, f'master playlist variant unreachable: {child_reason}'
+        return True, None
+    elif '.mpd' in lower_url or 'dash+xml' in content_type:
+        if '<mpd' in text.lower():
+            return True, None
+        return False, 'not a valid DASH manifest (missing <MPD>)'
+    elif any(t in content_type for t in STREAM_TYPES):
+        return True, None
+    else:
+        return False, f'unrecognized content-type: {content_type}'
 
 
 def gh_headers():
@@ -252,6 +281,76 @@ def matching_urls(content, names):
     return found
 
 
+def duckduckgo_search(query, max_results=MAX_WEB_RESULTS):
+    """Keyless web search via DuckDuckGo's HTML endpoint (no API key needed).
+    Best-effort: DuckDuckGo may rate-limit or change markup, so failures here
+    just mean this source contributes nothing, not a hard error."""
+    try:
+        resp = requests.get(
+            DUCKDUCKGO_URL,
+            params={'q': query},
+            headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'},
+            timeout=15,
+        )
+    except Exception as e:
+        print(f'  web search error for {query!r}: {e}')
+        return []
+    if resp.status_code != 200:
+        print(f'  web search failed ({resp.status_code}) for {query!r}')
+        return []
+    results = []
+    for m in re.finditer(r'class="result__a"[^>]*href="([^"]+)"', resp.text):
+        target = m.group(1)
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(target).query)
+        real_url = qs.get('uddg', [target])[0]
+        real_url = urllib.parse.unquote(real_url)
+        if real_url not in results:
+            results.append(real_url)
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def search_web_for_candidates(names):
+    """Broaden discovery beyond GitHub code search: look up the channel name
+    on the open web and pull any .m3u8/.mpd URLs out of pages that actually
+    mention the channel by (close to) its full name."""
+    searchable = [n for n in names if len(normalize(n)) >= 4]
+    if not searchable:
+        return []
+    query_name = searchable[0]
+    pages = duckduckgo_search(f'"{query_name}" live stream m3u8')
+    time.sleep(SEARCH_DELAY)
+
+    name_patterns = [re.compile(r'\b' + re.escape(n) + r'\b', re.IGNORECASE) for n in searchable]
+    candidates = []
+    seen = set()
+    for page_url in pages:
+        try:
+            resp = requests.get(page_url, timeout=10,
+                                 headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'})
+        except Exception:
+            continue
+        if resp.status_code != 200:
+            continue
+        text = resp.text
+        if not any(p.search(text) for p in name_patterns):
+            continue  # page doesn't actually mention this channel by name
+        found_here = 0
+        for m in STREAM_URL_RE.finditer(text):
+            url = m.group(0)
+            if url in seen:
+                continue
+            seen.add(url)
+            candidates.append(url)
+            found_here += 1
+            if found_here >= MAX_WEB_URLS_PER_PAGE:
+                break
+        if len(candidates) >= MAX_FILES_TO_INSPECT:
+            break
+    return candidates
+
+
 def find_replacement(names, exclude_urls):
     raw_files = search_github_for_candidates(names)
     for raw_url in raw_files:
@@ -267,6 +366,14 @@ def find_replacement(names, exclude_urls):
             ok, _ = verify_playable(candidate_url)
             if ok:
                 return candidate_url, raw_url
+
+    for candidate_url in search_web_for_candidates(names):
+        if candidate_url in exclude_urls:
+            continue
+        ok, _ = verify_playable(candidate_url)
+        if ok:
+            return candidate_url, 'web search'
+
     return None, None
 
 
