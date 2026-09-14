@@ -38,6 +38,24 @@ VERIFY_READ_BYTES = 8192
 URL_RE = re.compile(r'^https?://\S+$')
 STREAM_URL_RE = re.compile(r'https?://[^\s"\'<>]+?\.(?:m3u8|mpd)(?:\?[^\s"\'<>]*)?', re.IGNORECASE)
 STREAM_INF_URI_RE = re.compile(r'#EXT-X-STREAM-INF:[^\n]*\n\s*([^\n#][^\n]*)')
+
+# Code-hosting "view this file in the web UI" pages, not direct media
+# endpoints. Our own requests.get() happily follows the redirect a
+# '?raw=true'/'?raw=1' triggers and sees real playlist content, which is
+# exactly the trap: a real IPTV player/app doesn't reliably follow that
+# redirect (or gets served the HTML page instead), so the stream just
+# doesn't play even though our validator says it's fine. Reject these
+# outright rather than relying on validation to catch it.
+NON_DIRECT_URL_RE = re.compile(
+    r'^https?://(github\.com/[^/]+/[^/]+/blob/'
+    r'|gitlab\.com/[^/]+/[^/]+/-/blob/'
+    r'|bitbucket\.org/[^/]+/[^/]+/src/)',
+    re.IGNORECASE,
+)
+
+
+def is_direct_stream_url(url):
+    return not NON_DIRECT_URL_RE.match(url)
 EXTINF_TVG_ID_RE = re.compile(r'tvg-id="([^"]*)"')
 EXTINF_TVG_NAME_RE = re.compile(r'tvg-name="([^"]*)"')
 
@@ -404,7 +422,7 @@ def search_web_for_candidates(names):
         found_here = 0
         for m in STREAM_URL_RE.finditer(text):
             url = m.group(0)
-            if url in seen:
+            if url in seen or not is_direct_stream_url(url):
                 continue
             seen.add(url)
             candidates.append(url)
@@ -426,14 +444,14 @@ def find_replacement(names, exclude_urls):
         if resp.status_code != 200:
             continue
         for candidate_url in matching_urls(resp.text, names):
-            if candidate_url in exclude_urls:
+            if candidate_url in exclude_urls or not is_direct_stream_url(candidate_url):
                 continue
             ok, _ = verify_playable(candidate_url)
             if ok:
                 return candidate_url, raw_url
 
     for candidate_url in search_web_for_candidates(names):
-        if candidate_url in exclude_urls:
+        if candidate_url in exclude_urls or not is_direct_stream_url(candidate_url):
             continue
         ok, _ = verify_playable(candidate_url)
         if ok:
