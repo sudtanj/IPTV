@@ -22,13 +22,21 @@ from validate_streams import STREAM_TYPES
 M3U_FILE = 'index.m3u'
 GITHUB_API = 'https://api.github.com/search/code'
 SEARCH_EXTENSIONS = ('m3u', 'm3u8')
-MAX_CANDIDATES_PER_QUERY = 5
-MAX_FILES_TO_INSPECT = 8
+# These are ceilings to keep a single channel's search from running forever,
+# not targets: find_replacement() keeps trying every candidate from every
+# query/page until one actually verifies, or all of them are exhausted.
+MAX_CANDIDATES_PER_QUERY = 20
+MAX_FILES_TO_INSPECT = 40
 SEARCH_DELAY = 2.5  # stay under GitHub code search rate limits
 
 DUCKDUCKGO_URL = 'https://html.duckduckgo.com/html/'
-MAX_WEB_RESULTS = 6
-MAX_WEB_URLS_PER_PAGE = 4
+WEB_QUERY_TEMPLATES = (
+    '"{name}" live stream m3u8',
+    '"{name}" m3u8 playlist',
+    '"{name}" iptv link',
+)
+MAX_WEB_RESULTS = 15
+MAX_WEB_URLS_PER_PAGE = 10
 
 VERIFY_TIMEOUT = 12
 VERIFY_RETRIES = 2
@@ -396,41 +404,50 @@ def duckduckgo_search(query, max_results=MAX_WEB_RESULTS):
 
 def search_web_for_candidates(names):
     """Broaden discovery beyond GitHub code search: look up the channel name
-    on the open web and pull any .m3u8/.mpd URLs out of pages that actually
-    mention the channel by (close to) its full name."""
+    on the open web (trying several query phrasings, not just one) and pull
+    any .m3u8/.mpd URLs out of pages that actually mention the channel by
+    (close to) its full name."""
     searchable = [n for n in names if len(normalize(n)) >= 4]
     if not searchable:
         return []
     query_name = searchable[0]
-    pages = duckduckgo_search(f'"{query_name}" live stream m3u8')
-    time.sleep(SEARCH_DELAY)
-
     name_patterns = [re.compile(r'\b' + re.escape(n) + r'\b', re.IGNORECASE) for n in searchable]
     candidates = []
-    seen = set()
-    for page_url in pages:
-        try:
-            resp = requests.get(page_url, timeout=10,
-                                 headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'})
-        except Exception:
-            continue
-        if resp.status_code != 200:
-            continue
-        text = resp.text
-        if not any(p.search(text) for p in name_patterns):
-            continue  # page doesn't actually mention this channel by name
-        found_here = 0
-        for m in STREAM_URL_RE.finditer(text):
-            url = m.group(0)
-            if url in seen or not is_direct_stream_url(url):
-                continue
-            seen.add(url)
-            candidates.append(url)
-            found_here += 1
-            if found_here >= MAX_WEB_URLS_PER_PAGE:
-                break
+    seen_urls = set()
+    seen_pages = set()
+
+    for template in WEB_QUERY_TEMPLATES:
         if len(candidates) >= MAX_FILES_TO_INSPECT:
             break
+        pages = duckduckgo_search(template.format(name=query_name))
+        time.sleep(SEARCH_DELAY)
+
+        for page_url in pages:
+            if page_url in seen_pages:
+                continue
+            seen_pages.add(page_url)
+            try:
+                resp = requests.get(page_url, timeout=10,
+                                     headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'})
+            except Exception:
+                continue
+            if resp.status_code != 200:
+                continue
+            text = resp.text
+            if not any(p.search(text) for p in name_patterns):
+                continue  # page doesn't actually mention this channel by name
+            found_here = 0
+            for m in STREAM_URL_RE.finditer(text):
+                url = m.group(0)
+                if url in seen_urls or not is_direct_stream_url(url):
+                    continue
+                seen_urls.add(url)
+                candidates.append(url)
+                found_here += 1
+                if found_here >= MAX_WEB_URLS_PER_PAGE:
+                    break
+            if len(candidates) >= MAX_FILES_TO_INSPECT:
+                break
     return candidates
 
 
