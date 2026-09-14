@@ -434,28 +434,65 @@ def search_web_for_candidates(names):
     return candidates
 
 
-def find_replacement(names, exclude_urls):
-    raw_files = search_github_for_candidates(names)
-    for raw_url in raw_files:
-        try:
-            resp = requests.get(raw_url, timeout=10)
-        except Exception:
-            continue
-        if resp.status_code != 200:
-            continue
-        for candidate_url in matching_urls(resp.text, names):
-            if candidate_url in exclude_urls or not is_direct_stream_url(candidate_url):
-                continue
-            ok, _ = verify_playable(candidate_url)
-            if ok:
-                return candidate_url, raw_url
+def resolve_candidate_file(file_url, names, exclude_urls):
+    """A discovered .m3u8/.mpd URL might already be the real stream, or it
+    might be an M3U 'wrapper' file (common for personal per-channel mirror
+    repos) that just lists one or more real links inside — in which case
+    pointing our own playlist at the wrapper URL itself doesn't work for a
+    real player even though it looks like valid M3U/HLS content. Fetch it,
+    and if it parses as a list of #EXTINF entries, test the entries that
+    match this channel by name (or the single entry, if the file only has
+    one) rather than the wrapper URL itself."""
+    try:
+        resp = requests.get(file_url, timeout=10,
+                             headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'})
+    except Exception:
+        return None
+    if resp.status_code != 200:
+        return None
+    content = resp.text
 
-    for candidate_url in search_web_for_candidates(names):
+    inner_urls = None
+    if content.lstrip().startswith('#EXTM3U'):
+        entries = extract_channel_entries(content)
+        if entries:
+            matched = matching_urls(content, names)
+            if matched:
+                inner_urls = matched
+            elif len(entries) == 1:
+                inner_urls = [entries[0]['url']]
+            else:
+                # multiple entries, none naming this channel: too ambiguous
+                # to guess which one is meant, so this file contributes
+                # nothing (do NOT fall back to the wrapper URL itself)
+                return None
+    if inner_urls is None:
+        # Not recognizable as an M3U wrapper list at all - the file URL
+        # itself might be a direct manifest (e.g. a real .mpd found via web
+        # search), so try it as-is.
+        inner_urls = [file_url]
+
+    for candidate_url in inner_urls:
         if candidate_url in exclude_urls or not is_direct_stream_url(candidate_url):
             continue
         ok, _ = verify_playable(candidate_url)
         if ok:
-            return candidate_url, 'web search'
+            return candidate_url
+    return None
+
+
+def find_replacement(names, exclude_urls):
+    for raw_url in search_github_for_candidates(names):
+        result = resolve_candidate_file(raw_url, names, exclude_urls)
+        if result:
+            return result, raw_url
+
+    for file_url in search_web_for_candidates(names):
+        if file_url in exclude_urls or not is_direct_stream_url(file_url):
+            continue
+        result = resolve_candidate_file(file_url, names, exclude_urls)
+        if result:
+            return result, 'web search'
 
     return None, None
 
