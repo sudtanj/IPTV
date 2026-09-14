@@ -77,21 +77,81 @@ def _fetch(url, headers, read_bytes=VERIFY_READ_BYTES):
     return False, last_reason, b'', ''
 
 
+def _has_hls_content(text):
+    """A playlist that's just '#EXTM3U' with no segments/variants is not
+    actually sending any stream data (e.g. a channel that went offline but
+    whose endpoint still answers with an empty shell playlist)."""
+    if '#EXTINF' in text or '#EXT-X-STREAM-INF' in text:
+        return True
+    return any(l.strip() and not l.strip().startswith('#') for l in text.splitlines())
+
+
+RTSP_TIMEOUT = 8
+
+
+def verify_rtsp(url):
+    """RTSP has no HTTP semantics, so this sends a real DESCRIBE request over
+    a raw socket and requires both a 200 reply AND an SDP body (a 200 with
+    no SDP means the server answered but isn't actually offering a stream)."""
+    import socket
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or 554
+    if not host:
+        return False, 'invalid RTSP URL (no host)'
+    try:
+        with socket.create_connection((host, port), timeout=RTSP_TIMEOUT) as sock:
+            sock.settimeout(RTSP_TIMEOUT)
+            request = (
+                f'DESCRIBE {url} RTSP/1.0\r\n'
+                'CSeq: 1\r\n'
+                'Accept: application/sdp\r\n'
+                'User-Agent: iptv-stream-fixer\r\n\r\n'
+            )
+            sock.sendall(request.encode())
+            data = b''
+            try:
+                while len(data) < 8192:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    data += chunk
+            except socket.timeout:
+                pass
+    except Exception as e:
+        return False, str(e)
+
+    if not data:
+        return False, 'no data received from RTSP server'
+    text = data.decode('latin-1', errors='ignore')
+    status_line = text.splitlines()[0] if text else ''
+    if 'RTSP/1.0 200' not in status_line:
+        return False, f'RTSP server did not return 200: {status_line or "no response"}'
+    if 'v=0' not in text:
+        return False, 'RTSP DESCRIBE returned 200 but no SDP body (no real stream data)'
+    return True, None
+
+
 def verify_playable(url, extra_headers=None, _is_variant_check=False):
     """Actually fetch the stream and check its real content, not just headers:
-    an HLS URL must return a body starting with '#EXTM3U', a DASH manifest
-    must contain '<MPD', anything else falls back to a content-type check.
-    A HEAD request (or a GET that only checks status/content-type) isn't
-    enough — plenty of dead/expired URLs still answer 200 with a plausible
-    content-type. `extra_headers` (e.g. a stream's own Referer/User-Agent
-    from its #EXTVLCOPT lines) matters too: some CDNs 403/reject requests
-    that don't send the referer a real player would send.
+    an HLS URL must return a body starting with '#EXTM3U' AND contain actual
+    segments/variants, a DASH manifest must contain '<MPD', an RTSP URL must
+    complete a real DESCRIBE handshake with an SDP body, anything else falls
+    back to a content-type check. A HEAD request (or a GET that only checks
+    status/content-type) isn't enough — plenty of dead/expired URLs still
+    answer 200 with a plausible content-type but no real data.
+    `extra_headers` (e.g. a stream's own Referer/User-Agent from its
+    #EXTVLCOPT lines) matters too: some CDNs 403/reject requests that don't
+    send the referer a real player would send.
 
     For an HLS *master* playlist, a #EXTM3U prefix alone isn't proof the
     stream is live: some CDNs (YouTube included) keep serving a
     structurally valid master playlist long after the underlying broadcast
     is over, and only the referenced variant playlist actually fails. So a
     master playlist's first variant is fetched too, one level deep."""
+    if url.lower().startswith('rtsp://'):
+        return verify_rtsp(url)
+
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'}
     if extra_headers:
         headers.update(extra_headers)
@@ -111,6 +171,8 @@ def verify_playable(url, extra_headers=None, _is_variant_check=False):
         if not text.startswith('#EXTM3U'):
             return False, 'not a valid HLS playlist (missing #EXTM3U)'
         if _is_variant_check:
+            if not _has_hls_content(text):
+                return False, 'HLS variant playlist has no segments (no real data)'
             return True, None
         m = STREAM_INF_URI_RE.search(text)
         if m:
@@ -118,6 +180,9 @@ def verify_playable(url, extra_headers=None, _is_variant_check=False):
             child_ok, child_reason = verify_playable(variant_url, extra_headers, _is_variant_check=True)
             if not child_ok:
                 return False, f'master playlist variant unreachable: {child_reason}'
+            return True, None
+        if not _has_hls_content(text):
+            return False, 'HLS playlist has no segments (no real data)'
         return True, None
     elif '.mpd' in lower_url or 'dash+xml' in content_type:
         if '<mpd' in text.lower():
