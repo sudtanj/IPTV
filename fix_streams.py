@@ -34,9 +34,12 @@ WEB_QUERY_TEMPLATES = (
     '"{name}" live stream m3u8',
     '"{name}" m3u8 playlist',
     '"{name}" iptv link',
+    '"{name}" m3u8 github',
+    '"{name}" streaming url hls',
+    '{name} live tv m3u8 2026',
 )
-MAX_WEB_RESULTS = 15
-MAX_WEB_URLS_PER_PAGE = 10
+MAX_WEB_RESULTS = 20
+MAX_WEB_URLS_PER_PAGE = 15
 
 VERIFY_TIMEOUT = 12
 VERIFY_RETRIES = 2
@@ -64,6 +67,45 @@ NON_DIRECT_URL_RE = re.compile(
 
 def is_direct_stream_url(url):
     return not NON_DIRECT_URL_RE.match(url)
+
+
+# Static file hosts. A playlist committed to one of these is a *file*, not a
+# live streaming endpoint: it can't update as segments rotate, so pointing
+# our playlist at it just adds an indirection that rots. These always get
+# descended into for the real underlying stream URL, never used as-is.
+STATIC_FILE_HOST_RE = re.compile(
+    r'^https?://(raw\.githubusercontent\.com/'
+    r'|gist\.githubusercontent\.com/'
+    r'|[^/]+\.github\.io/'
+    r'|gitlab\.com/.+/-/raw/'
+    r'|raw\.githack\.com/'
+    r'|cdn\.jsdelivr\.net/gh/)',
+    re.IGNORECASE,
+)
+
+# Playlist files routinely keep alternative/backup sources as commented-out
+# lines (our own index.m3u does it too). Those are a rich source of extra
+# candidates for the same channel.
+COMMENTED_URL_RE = re.compile(r'^[ \t]*#+[ \t]*(https?://\S+)[ \t]*$', re.MULTILINE)
+IP_HOST_RE = re.compile(r'^https?://(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:/|$)')
+
+
+def is_static_file_host(url):
+    return bool(STATIC_FILE_HOST_RE.match(url))
+
+
+def candidate_priority(url):
+    """Sort key (lower first) favouring sources likely to stay alive: a named
+    host over a bare IP:port (unofficial restreams on raw IPs die fastest),
+    and HTTPS over plain HTTP (many players refuse mixed content)."""
+    score = 0
+    if not url.lower().startswith('https://'):
+        score += 1
+    if IP_HOST_RE.match(url):
+        score += 2
+    return score
+
+
 EXTINF_TVG_ID_RE = re.compile(r'tvg-id="([^"]*)"')
 EXTINF_TVG_NAME_RE = re.compile(r'tvg-name="([^"]*)"')
 
@@ -451,15 +493,50 @@ def search_web_for_candidates(names):
     return candidates
 
 
+def collect_inner_urls(content, names, base_url):
+    """Pull every plausible stream URL *out of* a playlist file: entries that
+    name this channel, the variants of an HLS master playlist, and the
+    commented-out backup sources these files usually carry. Returns None if
+    the file is a multi-channel list with nothing naming this channel (too
+    ambiguous to guess from)."""
+    urls = []
+    entries = extract_channel_entries(content)
+    if entries:
+        matched = matching_urls(content, names)
+        if matched:
+            urls.extend(matched)
+        elif len(entries) == 1:
+            urls.append(entries[0]['url'])
+        else:
+            return None
+
+    # An HLS master playlist points at variant playlists rather than naming
+    # channels, so #EXTINF parsing finds nothing in it.
+    for m in STREAM_INF_URI_RE.finditer(content):
+        urls.append(urllib.parse.urljoin(base_url, m.group(1).strip()))
+
+    for m in COMMENTED_URL_RE.finditer(content):
+        urls.append(m.group(1).strip())
+
+    deduped = []
+    for u in urls:
+        if u not in deduped:
+            deduped.append(u)
+    return deduped
+
+
 def resolve_candidate_file(file_url, names, exclude_urls):
-    """A discovered .m3u8/.mpd URL might already be the real stream, or it
-    might be an M3U 'wrapper' file (common for personal per-channel mirror
-    repos) that just lists one or more real links inside — in which case
-    pointing our own playlist at the wrapper URL itself doesn't work for a
-    real player even though it looks like valid M3U/HLS content. Fetch it,
-    and if it parses as a list of #EXTINF entries, test the entries that
-    match this channel by name (or the single entry, if the file only has
-    one) rather than the wrapper URL itself."""
+    """A discovered .m3u8/.mpd URL might already be the real live stream, or
+    it might be a *file* that merely points at one — a per-channel mirror
+    committed to a GitHub repo, say. Pointing our playlist at such a file
+    doesn't work for a real player (and can't keep working, since a static
+    file can't update as live segments rotate), even though fetching it
+    returns perfectly valid playlist content that fools a naive check.
+
+    So: for a file on a static host, never use the file URL itself — descend
+    and find the real stream it references. For a URL on a normal host, try
+    it directly first (a genuine CDN master playlist is exactly what we
+    want), then fall back to descending into it."""
     try:
         resp = requests.get(file_url, timeout=10,
                              headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'})
@@ -469,29 +546,26 @@ def resolve_candidate_file(file_url, names, exclude_urls):
         return None
     content = resp.text
 
-    inner_urls = None
-    if content.lstrip().startswith('#EXTM3U'):
-        entries = extract_channel_entries(content)
-        if entries:
-            matched = matching_urls(content, names)
-            if matched:
-                inner_urls = matched
-            elif len(entries) == 1:
-                inner_urls = [entries[0]['url']]
-            else:
-                # multiple entries, none naming this channel: too ambiguous
-                # to guess which one is meant, so this file contributes
-                # nothing (do NOT fall back to the wrapper URL itself)
-                return None
-    if inner_urls is None:
-        # Not recognizable as an M3U wrapper list at all - the file URL
-        # itself might be a direct manifest (e.g. a real .mpd found via web
-        # search), so try it as-is.
-        inner_urls = [file_url]
+    static_host = is_static_file_host(file_url)
+    is_playlist = content.lstrip().startswith('#EXTM3U')
 
-    for candidate_url in inner_urls:
+    if not static_host and not is_playlist:
+        # Not a playlist we can read (e.g. a DASH .mpd) - try it as-is.
+        candidates = [file_url]
+    else:
+        inner = collect_inner_urls(content, names, file_url) if is_playlist else []
+        if inner is None:
+            return None  # ambiguous multi-channel list
+        inner.sort(key=candidate_priority)
+        # A real host's own URL is a legitimate endpoint, so try it first;
+        # a static-host file URL is never usable, so it isn't a candidate.
+        candidates = inner if static_host else [file_url] + inner
+
+    for candidate_url in candidates:
         if candidate_url in exclude_urls or not is_direct_stream_url(candidate_url):
             continue
+        if is_static_file_host(candidate_url):
+            continue  # another static file: not a usable endpoint either
         ok, _ = verify_playable(candidate_url)
         if ok:
             return candidate_url
