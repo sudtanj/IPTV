@@ -30,6 +30,16 @@ MAX_FILES_TO_INSPECT = 40
 SEARCH_DELAY = 2.5  # stay under GitHub code search rate limits
 
 DUCKDUCKGO_URL = 'https://html.duckduckgo.com/html/'
+# The broadcaster's own live page is the most durable source there is, so
+# it's checked before any third-party mirror. Keyed by normalized channel
+# name (see normalize()); add more channels here as their pages are known.
+OFFICIAL_SOURCE_PAGES = {
+    'transtv': ('https://www.transtv.co.id/live',),
+}
+MAX_OFFICIAL_ASSETS = 6
+BROWSER_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+
 WEB_QUERY_TEMPLATES = (
     '"{name}" live stream m3u8',
     '"{name}" m3u8 playlist',
@@ -493,6 +503,76 @@ def search_web_for_candidates(names):
     return candidates
 
 
+SCRIPT_SRC_RE = re.compile(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', re.IGNORECASE)
+
+
+def extract_stream_urls(text):
+    """Stream URLs on a broadcaster page are usually embedded in JSON or JS
+    rather than sitting in plain HTML, so undo the usual manglings (escaped
+    slashes, HTML entities) before looking for them."""
+    unescaped = (text.replace('\\/', '/')
+                     .replace('&#x2F;', '/').replace('&#47;', '/')
+                     .replace('\\u0026', '&').replace('&amp;', '&'))
+    found = []
+    for m in STREAM_URL_RE.finditer(unescaped):
+        url = m.group(0)
+        if url not in found:
+            found.append(url)
+    return found
+
+
+def search_official_page_for_candidates(names):
+    """Scrape the broadcaster's own live page for its stream URL. Returns
+    (url, headers) pairs: such a stream usually only plays when the request
+    carries the broadcaster's page as Referer, so the headers that made it
+    verify need to travel with it into the playlist entry."""
+    pages = []
+    for name in names:
+        for page in OFFICIAL_SOURCE_PAGES.get(normalize(name), ()):
+            if page not in pages:
+                pages.append(page)
+    if not pages:
+        return []
+
+    origin = None
+    results = []
+    for page_url in pages:
+        parsed = urllib.parse.urlparse(page_url)
+        origin = f'{parsed.scheme}://{parsed.netloc}/'
+        headers = {'User-Agent': BROWSER_UA, 'Referer': origin}
+        try:
+            resp = requests.get(page_url, timeout=15, headers=headers)
+        except Exception as e:
+            print(f'  official page error for {page_url}: {e}')
+            continue
+        if resp.status_code != 200:
+            print(f'  official page failed ({resp.status_code}): {page_url}')
+            continue
+
+        found = extract_stream_urls(resp.text)
+        if not found:
+            # A modern site loads the stream from a JS bundle rather than
+            # inlining it, so follow a few of the page's own scripts.
+            for i, m in enumerate(SCRIPT_SRC_RE.finditer(resp.text)):
+                if i >= MAX_OFFICIAL_ASSETS:
+                    break
+                asset_url = urllib.parse.urljoin(page_url, m.group(1))
+                if urllib.parse.urlparse(asset_url).netloc != parsed.netloc:
+                    continue  # third-party script, not the player config
+                try:
+                    asset = requests.get(asset_url, timeout=10, headers=headers)
+                except Exception:
+                    continue
+                if asset.status_code == 200:
+                    found.extend(u for u in extract_stream_urls(asset.text) if u not in found)
+
+        for url in found:
+            results.append((url, {'User-Agent': BROWSER_UA, 'Referer': origin}))
+        if found:
+            print(f'  official page {page_url}: found {len(found)} stream url(s)')
+    return results
+
+
 def collect_inner_urls(content, names, base_url):
     """Pull every plausible stream URL *out of* a playlist file: entries that
     name this channel, the variants of an HLS master playlist, and the
@@ -525,7 +605,7 @@ def collect_inner_urls(content, names, base_url):
     return deduped
 
 
-def resolve_candidate_file(file_url, names, exclude_urls):
+def resolve_candidate_file(file_url, names, exclude_urls, extra_headers=None):
     """A discovered .m3u8/.mpd URL might already be the real live stream, or
     it might be a *file* that merely points at one — a per-channel mirror
     committed to a GitHub repo, say. Pointing our playlist at such a file
@@ -539,7 +619,8 @@ def resolve_candidate_file(file_url, names, exclude_urls):
     want), then fall back to descending into it."""
     try:
         resp = requests.get(file_url, timeout=10,
-                             headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'})
+                             headers={'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)',
+                                      **(extra_headers or {})})
     except Exception:
         return None
     if resp.status_code != 200:
@@ -566,31 +647,63 @@ def resolve_candidate_file(file_url, names, exclude_urls):
             continue
         if is_static_file_host(candidate_url):
             continue  # another static file: not a usable endpoint either
-        ok, _ = verify_playable(candidate_url)
+        ok, _ = verify_playable(candidate_url, extra_headers=extra_headers)
         if ok:
             return candidate_url
     return None
 
 
 def find_replacement(names, exclude_urls):
+    """Returns (url, source, headers) — `headers` are the request headers the
+    replacement needs to play (None when it needs nothing special), so the
+    caller can write them onto the playlist entry."""
+    # The broadcaster's own page first: nothing else is as durable.
+    for url, headers in search_official_page_for_candidates(names):
+        if url in exclude_urls or not is_direct_stream_url(url) or is_static_file_host(url):
+            continue
+        result = resolve_candidate_file(url, names, exclude_urls, extra_headers=headers)
+        if result:
+            return result, 'official site', headers
+
     for raw_url in search_github_for_candidates(names):
         result = resolve_candidate_file(raw_url, names, exclude_urls)
         if result:
-            return result, raw_url
+            return result, raw_url, None
 
     for file_url in search_web_for_candidates(names):
         if file_url in exclude_urls or not is_direct_stream_url(file_url):
             continue
         result = resolve_candidate_file(file_url, names, exclude_urls)
         if result:
-            return result, 'web search'
+            return result, 'web search', None
 
-    return None, None
+    return None, None, None
 
 
 def block_url_lines(block):
     """Return indices of active (non-commented) URL lines in a block."""
     return [i for i, l in enumerate(block) if URL_RE.match(l.strip())]
+
+
+def apply_entry_headers(block, headers):
+    """Rewrite the entry's #EXTVLCOPT lines to the headers the new stream
+    needs. The old entry's referrer belongs to the old source, so leaving it
+    in place would stop the replacement playing on a CDN that checks it."""
+    if not headers:
+        return block
+    wanted = []
+    if headers.get('User-Agent'):
+        wanted.append(f"#EXTVLCOPT:http-user-agent={headers['User-Agent']}\n")
+    if headers.get('Referer'):
+        wanted.append(f"#EXTVLCOPT:http-referrer={headers['Referer']}\n")
+
+    stripped = [l for l in block
+                if not (EXTVLCOPT_UA_RE.match(l.strip())
+                        or EXTVLCOPT_REFERRER_RE.match(l.strip()))]
+    for i, line in enumerate(stripped):
+        if line.strip().startswith('#EXTINF'):
+            return stripped[:i + 1] + wanted + stripped[i + 1:]
+    return wanted + stripped
 
 
 def main():
@@ -632,7 +745,7 @@ def main():
             if l.strip().startswith('#http'):
                 existing_urls.add(l.strip().lstrip('#').strip())
 
-        replacement, source = find_replacement(names, existing_urls)
+        replacement, source, needed_headers = find_replacement(names, existing_urls)
         if replacement:
             print(f'  -> replacement found: {replacement} (from {source})')
             new_line = replacement + '\n'
@@ -647,7 +760,7 @@ def main():
                         inserted = True
                     continue
                 new_block.append(l)
-            block[:] = new_block
+            block[:] = apply_entry_headers(new_block, needed_headers)
             replaced.append((display, replacement, source))
         else:
             print('  -> no working replacement found')
