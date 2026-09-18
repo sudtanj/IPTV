@@ -9,6 +9,7 @@ replacement, validates the candidate, and swaps it in.
 Replaced URLs are kept as commented-out lines directly below the new one, so
 a fix can always be reviewed/reverted from the diff.
 """
+import base64
 import os
 import re
 import sys
@@ -120,6 +121,66 @@ EXTINF_TVG_ID_RE = re.compile(r'tvg-id="([^"]*)"')
 EXTINF_TVG_NAME_RE = re.compile(r'tvg-name="([^"]*)"')
 
 
+# Signed/tokenised stream URLs carry their own expiry. Wowza base64-encodes
+# it into a path segment; Akamai and friends put it in a query parameter.
+WOWZA_TOKEN_RE = re.compile(r'_tk([A-Za-z0-9+/=_-]{16,})')
+EXPIRY_PARAM_KEYS = ('expire', 'expires', 'exp', 'valid_until', 'wowzatokenendtime')
+
+
+def expired_token_reason(url):
+    """Return why a URL's embedded expiry has already passed, or None.
+
+    A signed URL whose token has expired typically answers 403 - which used
+    to be read as 'reachable' and promoted a long-dead stream into the
+    playlist. Catching the expiry from the URL itself is cheaper and more
+    honest than inferring it from the response."""
+    now_s = time.time()
+
+    def _check(key, raw):
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        # These appear as seconds or milliseconds depending on the CDN.
+        for scale in (1.0, 1000.0):
+            seconds = value / scale
+            # Only trust values landing in a plausible epoch-seconds range.
+            if 1_000_000_000 < seconds < 4_000_000_000:
+                if seconds < now_s:
+                    when = time.strftime('%Y-%m-%d', time.gmtime(seconds))
+                    return f'signed URL expired on {when} ({key})'
+                return None
+        return None
+
+    m = WOWZA_TOKEN_RE.search(url)
+    if m:
+        blob = m.group(1)
+        try:
+            decoded = base64.b64decode(blob + '=' * (-len(blob) % 4)).decode('utf-8', 'ignore')
+        except Exception:
+            decoded = ''
+        for key, raw in urllib.parse.parse_qsl(decoded):
+            if key.lower() in EXPIRY_PARAM_KEYS:
+                reason = _check(key, raw)
+                if reason:
+                    return reason
+
+    parsed = urllib.parse.urlparse(url)
+    for key, raw in urllib.parse.parse_qsl(parsed.query):
+        if key.lower() in EXPIRY_PARAM_KEYS:
+            reason = _check(key, raw)
+            if reason:
+                return reason
+    # Some CDNs sign via a path segment like /expire/1748334379/
+    for key in ('expire', 'expires'):
+        m = re.search(rf'/{key}/(\d{{9,14}})(?:/|$)', parsed.path, re.IGNORECASE)
+        if m:
+            reason = _check(key, m.group(1))
+            if reason:
+                return reason
+    return None
+
+
 def _fetch(url, headers, read_bytes=VERIFY_READ_BYTES):
     """GET with retries, returning (ok, reason, body_bytes, content_type)."""
     last_reason = 'unknown error'
@@ -133,7 +194,7 @@ def _fetch(url, headers, read_bytes=VERIFY_READ_BYTES):
             continue
         try:
             if resp.status_code == 403:
-                return True, 'status 403 (forbidden, assumed reachable)', b'', ''
+                return False, 'status 403 (forbidden)', b'', ''
             if resp.status_code not in (200, 206):
                 last_reason = f'status {resp.status_code}'
                 time.sleep(VERIFY_RETRY_DELAY)
@@ -210,7 +271,8 @@ def verify_rtsp(url):
     return True, None
 
 
-def verify_playable(url, extra_headers=None, _is_variant_check=False):
+def verify_playable(url, extra_headers=None, _is_variant_check=False,
+                    accept_unverifiable=False):
     """Actually fetch the stream and check its real content, not just headers:
     an HLS URL must return a body starting with '#EXTM3U' AND contain actual
     segments/variants, a DASH manifest must contain '<MPD', an RTSP URL must
@@ -226,9 +288,22 @@ def verify_playable(url, extra_headers=None, _is_variant_check=False):
     stream is live: some CDNs (YouTube included) keep serving a
     structurally valid master playlist long after the underlying broadcast
     is over, and only the referenced variant playlist actually fails. So a
-    master playlist's first variant is fetched too, one level deep."""
+    master playlist's first variant is fetched too, one level deep.
+
+    `accept_unverifiable` sets the bar differently depending on the question
+    being asked. Deciding whether an entry we already ship is dead, a 403
+    means "couldn't check" — some CDNs block our requests but serve real
+    players — so we leave that entry alone rather than churn a channel that
+    works for viewers. Deciding whether to *promote* a new URL into the
+    playlist, a 403 is a rejection: we never shipped a URL we couldn't
+    actually read. That asymmetry is deliberate — the bar for replacing has
+    to be higher than the bar for keeping."""
     if url.lower().startswith('rtsp://'):
         return verify_rtsp(url)
+
+    expiry_reason = expired_token_reason(url)
+    if expiry_reason:
+        return False, expiry_reason
 
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; iptv-stream-fixer)'}
     if extra_headers:
@@ -236,9 +311,9 @@ def verify_playable(url, extra_headers=None, _is_variant_check=False):
 
     ok, reason, body, content_type = _fetch(url, headers)
     if not ok:
+        if accept_unverifiable and reason == 'status 403 (forbidden)':
+            return True, 'status 403 (could not verify; leaving entry as-is)'
         return False, reason
-    if reason == 'status 403 (forbidden, assumed reachable)':
-        return True, reason
     if not body:
         return False, 'empty response body'
 
@@ -730,7 +805,8 @@ def main():
         dead_urls = []
         for idx in url_idxs:
             url = block[idx].strip()
-            ok, _ = verify_playable(url, extra_headers=headers)
+            # Lenient here: only replace an entry we can actually prove dead.
+            ok, _ = verify_playable(url, extra_headers=headers, accept_unverifiable=True)
             if ok:
                 any_alive = True
                 break
