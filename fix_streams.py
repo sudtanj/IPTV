@@ -581,6 +581,24 @@ def search_web_for_candidates(names):
 SCRIPT_SRC_RE = re.compile(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', re.IGNORECASE)
 
 
+def probe_official_page(page_url):
+    """Watch a real browser load the page and report the stream URLs its
+    player requests. Imported lazily and failure-tolerant: without Playwright
+    installed (or if the browser won't start) this yields nothing and the
+    caller falls back to reading the HTML."""
+    if os.environ.get('FIX_STREAMS_NO_BROWSER'):
+        return []
+    try:
+        from browser_probe import probe_stream_urls
+    except ImportError:
+        return []
+    try:
+        return probe_stream_urls(page_url, user_agent=BROWSER_UA)
+    except Exception as e:
+        print(f'  browser probe error for {page_url}: {e}')
+        return []
+
+
 def extract_stream_urls(text):
     """Stream URLs on a broadcaster page are usually embedded in JSON or JS
     rather than sitting in plain HTML, so undo the usual manglings (escaped
@@ -597,10 +615,15 @@ def extract_stream_urls(text):
 
 
 def search_official_page_for_candidates(names):
-    """Scrape the broadcaster's own live page for its stream URL. Returns
+    """Find the stream on the broadcaster's own live page. Returns
     (url, headers) pairs: such a stream usually only plays when the request
     carries the broadcaster's page as Referer, so the headers that made it
-    verify need to travel with it into the playlist entry."""
+    verify need to travel with it into the playlist entry.
+
+    A real browser goes first, because it sees what the player actually
+    requests. Reading the HTML is only a fallback: on these pages the real
+    URL arrives from an API call after load, and the URL sitting in the
+    markup is frequently a stale decoy."""
     pages = []
     for name in names:
         for page in OFFICIAL_SOURCE_PAGES.get(normalize(name), ()):
@@ -615,6 +638,17 @@ def search_official_page_for_candidates(names):
         parsed = urllib.parse.urlparse(page_url)
         origin = f'{parsed.scheme}://{parsed.netloc}/'
         headers = {'User-Agent': BROWSER_UA, 'Referer': origin}
+
+        probed = probe_official_page(page_url)
+        if probed:
+            print(f'  official page {page_url}: browser saw {len(probed)} stream request(s)')
+            for url, sent_headers in probed:
+                results.append((url, {
+                    'User-Agent': sent_headers.get('User-Agent') or BROWSER_UA,
+                    'Referer': sent_headers.get('Referer') or origin,
+                }))
+            continue
+
         try:
             resp = requests.get(page_url, timeout=15, headers=headers)
         except Exception as e:

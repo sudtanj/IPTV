@@ -27,7 +27,12 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests playwright
+
+      # Used to watch what a broadcaster's own player requests, which is the
+      # only reliable way to get the stream URL off a JS-driven live page.
+      - name: Install Chromium for browser probing
+        run: playwright install --with-deps chromium
 
       - name: Find and replace dead streams
         env:
