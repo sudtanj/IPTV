@@ -101,8 +101,25 @@ COMMENTED_URL_RE = re.compile(r'^[ \t]*#+[ \t]*(https?://\S+)[ \t]*$', re.MULTIL
 IP_HOST_RE = re.compile(r'^https?://(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:/|$)')
 
 
+# Xtream Codes panel URLs carry a subscriber's own username and password in
+# the path (/live/<user>/<pass>/<id>.m3u8) or query (get.php?username=...).
+# Those are somebody's paid credentials: they get rotated and revoked, and
+# they aren't ours to redistribute. Never ship one.
+CREDENTIAL_URL_RE = re.compile(
+    r'/(?:live|movie|series)/[^/]+/[^/]+/\d+(?:\.[a-z0-9]+)?(?:$|\?)'
+    r'|/get\.php\?.*username='
+    r'|/player_api\.php'
+    r'|/[^/]*@[^/]+/[^/]+/\d+(?:\.[a-z0-9]+)?(?:$|\?)',
+    re.IGNORECASE,
+)
+
+
 def is_static_file_host(url):
     return bool(STATIC_FILE_HOST_RE.match(url))
+
+
+def has_embedded_credentials(url):
+    return bool(CREDENTIAL_URL_RE.search(url))
 
 
 def candidate_priority(url):
@@ -566,7 +583,8 @@ def search_web_for_candidates(names):
             found_here = 0
             for m in STREAM_URL_RE.finditer(text):
                 url = m.group(0)
-                if url in seen_urls or not is_direct_stream_url(url):
+                if (url in seen_urls or not is_direct_stream_url(url)
+                        or has_embedded_credentials(url)):
                     continue
                 seen_urls.add(url)
                 candidates.append(url)
@@ -752,7 +770,8 @@ def resolve_candidate_file(file_url, names, exclude_urls, extra_headers=None):
         candidates = inner if static_host else [file_url] + inner
 
     for candidate_url in candidates:
-        if candidate_url in exclude_urls or not is_direct_stream_url(candidate_url):
+        if (candidate_url in exclude_urls or not is_direct_stream_url(candidate_url)
+                or has_embedded_credentials(candidate_url)):
             continue
         if is_static_file_host(candidate_url):
             continue  # another static file: not a usable endpoint either
@@ -768,7 +787,8 @@ def find_replacement(names, exclude_urls):
     caller can write them onto the playlist entry."""
     # The broadcaster's own page first: nothing else is as durable.
     for url, headers in search_official_page_for_candidates(names):
-        if url in exclude_urls or not is_direct_stream_url(url) or is_static_file_host(url):
+        if (url in exclude_urls or not is_direct_stream_url(url)
+                or is_static_file_host(url) or has_embedded_credentials(url)):
             continue
         result = resolve_candidate_file(url, names, exclude_urls, extra_headers=headers)
         if result:
@@ -780,7 +800,8 @@ def find_replacement(names, exclude_urls):
             return result, raw_url, None
 
     for file_url in search_web_for_candidates(names):
-        if file_url in exclude_urls or not is_direct_stream_url(file_url):
+        if (file_url in exclude_urls or not is_direct_stream_url(file_url)
+                or has_embedded_credentials(file_url)):
             continue
         result = resolve_candidate_file(file_url, names, exclude_urls)
         if result:
