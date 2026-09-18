@@ -10,13 +10,11 @@ https://cdnbal1.indihometv.com/atm/DASH/indosiar/indosiar-avc1_2500000=7-3277707
 #EXTINF:-1 tvg-id="TransTV" tvg-name="TransTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/c/c2/Logo_Trans_TV.png",TRANS TV
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36
 #EXTVLCOPT:http-referrer=https://20.detik.com/
-http://filex.me:8080/live/@singh_tesla_7207492/puWnhEGsXpK3/302312.m3u8
-#https://video.detik.com/transtv/smil:transtv.smil/playlist.m3u8
+https://video.detik.com/transtv/smil:transtv.smil/playlist.m3u8
 
 #EXTINF:-1 tvg-id="Trans7" tvg-name="Trans7" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Trans_7_2013.svg/512px-Trans_7_2013.svg.png",TRANS 7
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36
-http://filex.me:8080//@singh_tesla_7207492/puWnhEGsXpK3/302311.m3u8
-#https://video.detik.com/trans7/smil:trans7.smil/chunklist.m3u8
+https://video.detik.com/trans7/smil:trans7.smil/chunklist.m3u8
 
 #EXTINF:-1 tvg-id="MDTV" tvg-name="MDTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/MDTV_logo.svg/512px-MDTV_logo.svg.png",MDTV
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
@@ -29,13 +27,11 @@ https://cdnbal1.indihometv.com/atm/DASH/sctv/sctv-avc1_2500000=7-327770703000000
 
 #EXTINF:-1 tvg-id="CNNIndonesia" tvg-name="CNNIndonesia" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/CNN_Indonesia_logo.svg/512px-CNN_Indonesia_logo.svg.png",CNN Indonesia
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0
-https://live.cnnindonesia.com/livecnn/smil:cnntv/chunklist.m3u8
-#https://live.cnnindonesia.com/livecnn/smil:cnntv.smil/playlist.m3u8
+https://live.cnnindonesia.com/livecnn/smil:cnntv.smil/playlist.m3u8
 
 #EXTINF:-1 tvg-id="CNBCIndonesia" tvg-name="CNBCIndonesia" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/CNBC_Indonesia_logo.svg/512px-CNBC_Indonesia_logo.svg.png",CNBC Indonesia
 #EXTVLCOPT:http-user-agent=Mozilla/5.0
-https://live.cnbcindonesia.com/livecnbc/smil:cnbctv/chunklist_w548773743_b384000_sleng.m3u8
-#https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/playlist.m3u8
+https://live.cnbcindonesia.com/livecnbc/smil:cnbctv.smil/playlist.m3u8
 
 #EXTINF:-1 tvg-id="ANTV" tvg-name="ANTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/ANTV_logo_2012.svg/512px-ANTV_logo_2012.svg.png",ANTV
 #EXTVLCOPT:http-referrer=http://dens.tv/
@@ -55,14 +51,12 @@ https://op-flashcon-digdayahd-1.dens.tv/h/h12/index.m3u8
 #EXTINF:-1 tvg-id="RCTI" tvg-name="RCTI" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/e/ee/RCTI13Tahun.png",RCTI
 #EXTVLCOPT:http-user-agent=android-R+
 #EXTVLCOPT:http-referrer=https://www.rctiplus.com/
-https://mantul.biz.id:443/ekos/748382/190.m3u8
-#https://r-plus.sedotcw3.workers.dev/index.m3u8?id=rcti
+https://r-plus.sedotcw3.workers.dev/index.m3u8?id=rcti
 
 #EXTINF:-1 tvg-id="GTV" tvg-name="GTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/GTV_%282017%29.svg/512px-GTV_%282017%29.svg.png",GTV
 #EXTVLCOPT:http-user-agent=android-R+
 #EXTVLCOPT:http-referrer=https://www.rctiplus.com/
-https://mantul.biz.id:443/ekos/748382/192.m3u8
-#https://r-plus.sedotcw3.workers.dev/index.m3u8?id=gtv
+https://r-plus.sedotcw3.workers.dev/index.m3u8?id=gtv
 
 #EXTINF:-1 tvg-id="MNCTV" tvg-name="MNCTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/6/6d/MNCTV_logo_2015.png",MNCTV
 #KODIPROP:inputstream.adaptive.license_type=clearkey
@@ -91,13 +85,11 @@ https://cdn.nng.cloudns.us/live/m3u8/id/d4ff175b1e2d419.m3u8
 #EXTINF:-1 tvg-id="RTV" tvg-name="RTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/RTV_2014.svg/512px-RTV_2014.svg.png",RTV
 #EXTVLCOPT:http-referrer=http://dens.tv/
 #EXTVLCOPT:http-user-agent=DENSGO/3.00.00 (Linux;Android 15.0.0;) ExoPlayerLib/2.19.1
-https://op-flashcon-digdayahd-1.dens.tv/h/h10/01.m3u8
-#https://op-group1-swiftservehd-1.dens.tv/h/h10/index.m3u8?app_type=web&userid=lite&chname=RTV
+https://op-group1-swiftservehd-1.dens.tv/h/h10/index.m3u8?app_type=web&userid=lite&chname=RTV
 
 #EXTINF:-1 tvg-id="JTV" tvg-name="JTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/b/b3/JTV_logo_2016.png",JTV
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Firefox/101.0 Safari/537.36 Edg/111.0.1661.43
-https://stream8.cinerama.uz/blocked/index.m3u8
-#https://delivery-cdnisg1.iptvsystem.my.id/atm/DASH/jtv/manifest.mpd
+https://delivery-cdnisg1.iptvsystem.my.id/atm/DASH/jtv/manifest.mpd
 
 #EXTINF:-1 tvg-id="JakTV" tvg-name="JakTV" group-title="Lokal" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/e/e8/JakTV_logo.png",Jak TV
 #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Firefox/101.0 Safari/537.36 Edg/111.0.1661.43
@@ -470,8 +462,7 @@ https://atemecdnbalancer-voe.sysln.id/live/eds/HistoryHD/mediampd/HistoryHD.mpd
 https://d2xz2v5wuvgur6.cloudfront.net/out/v1/384f26c1c3b74ce09fa60bed24719b79/index.mpd
 
 #EXTINF:-1 tvg-id="Channel8.sg" tvg-logo="https://poster.starhubgo.com/Linear_channels2/103_1920x1080_HTV.png" group-title="SINGAPORE",CHANNEL 8
-https://live-us1.thaimomo.com/live-as/cheight-3/playlist.m3u8
-#http://cdn6.163189.xyz/163189/ch8
+http://cdn6.163189.xyz/163189/ch8
 
 #KODIPROP:inputstream.adaptive.license_type=clearkey
 #KODIPROP:inputstream.adaptive.license_key=4ee336861eed4840a555788dc54aea6e:f1f53644d4941d4ed31b4bb2478f8cf4
